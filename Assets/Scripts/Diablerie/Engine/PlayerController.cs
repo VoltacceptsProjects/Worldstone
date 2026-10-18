@@ -236,7 +236,7 @@ namespace Diablerie.Engine
             float cameraShift = 0;
             if (InventoryPanel.instance.visible)
                 cameraShift += 0.5f;
-            if (CharstatPanel.instance.visible || WaypointPanel.IsVisible || StashPanel.IsVisible)
+            if (CharstatPanel.instance.visible || WaypointPanel.IsVisible || StashPanel.IsVisible || GamblePanel.IsVisible)
                 cameraShift -= 0.5f;
             cameraController.horizontalShift = cameraShift;
         }
@@ -262,6 +262,14 @@ namespace Diablerie.Engine
                 if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space))
                 {
                     WaypointPanel.Hide();
+                }
+            }
+            else if (GamblePanel.IsVisible)
+            {
+                if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space))
+                {
+                    GamblePanel.Hide();
+                    InventoryPanel.instance.visible = false;
                 }
             }
             else if (StashPanel.IsVisible)

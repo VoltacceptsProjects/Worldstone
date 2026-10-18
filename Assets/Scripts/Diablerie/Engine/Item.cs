@@ -220,10 +220,12 @@ namespace Diablerie.Engine
             EndColor(sb);
         }
 
-        public string GetTitle()
+        // hideQuality shows the item like an unknown base item (plain white name), as shops do for gambling
+        public string GetTitle(bool hideQuality = false)
         {
             var sb = new StringBuilder();
             string color = Colors.ItemNormalHex;
+            if (!hideQuality)
             switch (quality)
             {
                 case Quality.Unique: color = Colors.ItemUniqueHex; break;
@@ -232,7 +234,11 @@ namespace Diablerie.Engine
                 case Quality.Magic: color = Colors.ItemMagicHex; break;
                 case Quality.LowQuality: color = Colors.ItemLowQualityHex; break;
             }
-            if (quality == Quality.HiQuality)
+            if (hideQuality)
+            {
+                // no prefix, it would give the quality away
+            }
+            else if (quality == Quality.HiQuality)
                 AppendColored(sb, Translation.Find("Hiquality") + " ", color);
             else if (quality == Quality.LowQuality)
                 AppendColored(sb, Translation.Find("Low Quality") + " ", color);
@@ -241,7 +247,7 @@ namespace Diablerie.Engine
                 AppendColored(sb, quantity.ToString(), color);
                 sb.Append(" ");
             }
-            if (identified)
+            if (identified && !hideQuality)
             {
                 AppendColored(sb, name, color);
                 if (quality == Quality.Unique || quality == Quality.Set)
@@ -256,10 +262,10 @@ namespace Diablerie.Engine
             return sb.ToString();
         }
 
-        public string GetDescription()
+        public string GetDescription(bool hideQuality = false)
         {
             var sb = new StringBuilder();
-            sb.Append(GetTitle());
+            sb.Append(GetTitle(hideQuality));
 
             if (info.weapon != null)
             {
@@ -304,10 +310,14 @@ namespace Diablerie.Engine
             if (levelReq > 0)
                 sb.Append("\nRequired Level: " + levelReq);
 
-            if (identified)
+            if (identified && !hideQuality)
             {
                 DescribeProperties(sb);
                 DescribeSet(sb);
+            }
+            else if (hideQuality)
+            {
+                // a shop only shows the base item
             }
             else
             {

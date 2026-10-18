@@ -292,6 +292,30 @@ namespace Diablerie.Engine
             }
         }
 
+        // Makes an item the way a drop would, but without putting it into the world. Used for shop stock.
+        // Gambled items are always magic or better: a plain base item is bumped up to magic.
+        public static Item GenerateForGamble(string code, int itemLevel)
+        {
+            var item = Item.Create(code);
+            if (item == null)
+                return null;
+
+            item.level = Mathf.Max(itemLevel, item.info.level);
+            SelectItemQuality(item, new QualityFactors(), mf: 0);
+            if (item.quality == Item.Quality.HiQuality ||
+                item.quality == Item.Quality.Normal ||
+                item.quality == Item.Quality.LowQuality)
+            {
+                item.quality = Item.Quality.Magic;
+            }
+
+            // Nothing is revealed until it is bought
+            item.identified = false;
+            GenerateItemProperties(item);
+            GenerateItemQuantity(item);
+            return item;
+        }
+
         public static void Drop(string code, Vector3 pos, int itemLevel)
         {
             Drop(code, pos, itemLevel, new QualityFactors());

@@ -2,6 +2,7 @@ using Diablerie.Engine;
 using Diablerie.Engine.Datasheets;
 using Diablerie.Engine.Entities;
 using Diablerie.Engine.World;
+using Diablerie.Game.UI;
 using UnityEngine;
 
 namespace Diablerie.Game
@@ -26,6 +27,15 @@ namespace Diablerie.Game
                    !id.Equals("cain1", System.StringComparison.OrdinalIgnoreCase);
         }
 
+        // The original asks Talk / Trade / Gamble first. There is no dialog menu yet, so gamblers go straight to the shop.
+        private static void OpenGambling(Unit vendor, Unit initiator)
+        {
+            var player = WorldState.instance.Player;
+            if (player == null || player.unit != initiator)
+                return;
+            GamblePanel.Show(player, vendor.monStat.id);
+        }
+
         // "I will identify items for you at no charge."
         private static void IdentifyItemsForPlayer(Unit initiator)
         {
@@ -46,6 +56,8 @@ namespace Diablerie.Game
             Debug.Log("Interact with " + target);
             if (IsDeckardCain(target))
                 IdentifyItemsForPlayer(initiator);
+            else if (Gambling.IsGambler(target.monStat))
+                OpenGambling(target, initiator);
             initiator.LookAt(target.iso.pos);
             var greetingSound = SoundInfo.Find(target.monStat.id + "_greeting_1");
             AudioManager.instance.Play(greetingSound, target.transform);

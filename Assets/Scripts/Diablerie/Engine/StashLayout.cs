@@ -26,13 +26,40 @@ namespace Diablerie.Engine
         public static StashLayout Get()
         {
             if (_cached == null)
-                _cached = Read();
+                _cached = Read(RowNames, new StashLayout(), 60, 120);
             return _cached;
         }
 
-        private static StashLayout Read()
+        private static StashLayout _cachedVendor;
+
+        // The shop panel an NPC shows: a 10x10 grid of 29x29 cells on the buysell artwork.
+        // inventory.txt is NOT used here. Its "Trade Page 1" numbers don't describe the grid that is drawn
+        // in the artwork, which squashed the item positions and left the items piled up on top of each other.
+        // TUNE: VendorGridLeft / VendorGridTop are the pixels from the panel's top left corner to the first cell.
+        private const float VendorGridLeft = 15;
+        private const float VendorGridTop = 63;
+
+        public static StashLayout GetVendor()
         {
-            var layout = new StashLayout();
+            if (_cachedVendor == null)
+            {
+                _cachedVendor = new StashLayout
+                {
+                    columns = 10,
+                    rows = 10,
+                    cellWidth = 29,
+                    cellHeight = 29,
+                    gridLeft = VendorGridLeft,
+                    gridTop = VendorGridTop,
+                    source = "fixed vendor geometry",
+                };
+                Debug.Log("StashLayout (vendor): " + _cachedVendor);
+            }
+            return _cachedVendor;
+        }
+
+        private static StashLayout Read(string[] rowNames, StashLayout layout, float minTop, float maxTop)
+        {
             try
             {
                 string text = Encoding.ASCII.GetString(Mpq.ReadAllBytes(InventoryPath));
@@ -52,7 +79,7 @@ namespace Diablerie.Engine
                 int iGridTop = Column(header, "gridTop", 9);
                 int iGridBottom = Column(header, "gridBottom", 10);
 
-                foreach (var rowName in RowNames)
+                foreach (var rowName in rowNames)
                 {
                     for (int i = 1; i < lines.Length; ++i)
                     {
@@ -71,13 +98,13 @@ namespace Diablerie.Engine
                         layout.cellWidth = (right - left) / (float) gridX;
                         layout.cellHeight = (bottom - top) / (float) gridY;
                         layout.gridLeft = left - Int(cells, iInvLeft);
-                        layout.gridTop = ResolveGridTop(top, Int(cells, iInvTop), Int(cells, iInvBottom), layout.gridTop);
+                        layout.gridTop = ResolveGridTop(top, Int(cells, iInvTop), Int(cells, iInvBottom), layout.gridTop, minTop, maxTop);
                         layout.source = "inventory.txt '" + rowName + "'";
                         Debug.Log("StashLayout: " + layout);
                         return layout;
                     }
                 }
-                Debug.LogWarning("StashLayout: no bank row found in inventory.txt, using the built-in fallback");
+                Debug.LogWarning("StashLayout: no row " + string.Join(" / ", rowNames) + " found in inventory.txt, using the built-in fallback");
             }
             catch (Exception e)
             {
@@ -89,7 +116,7 @@ namespace Diablerie.Engine
         // inventory.txt is not consistent about which of invTop / invBottom is the upper edge of a panel,
         // so try both and keep the one that puts the grid inside of the panel artwork. The grid starts
         // roughly 60-120 pixels below the top edge of the stash art (below the gold bar and the title).
-        private static float ResolveGridTop(int gridTop, int invTop, int invBottom, float fallback)
+        private static float ResolveGridTop(int gridTop, int invTop, int invBottom, float fallback, float minTop, float maxTop)
         {
             const float PanelHeight = 432;
             float[] candidates =
@@ -101,7 +128,7 @@ namespace Diablerie.Engine
             };
             foreach (var value in candidates)
             {
-                if (value >= 60 && value <= 120)
+                if (value >= minTop && value <= maxTop)
                     return value;
             }
             Debug.LogWarning("StashLayout: gridTop " + gridTop + " (invTop " + invTop + ", invBottom " + invBottom +

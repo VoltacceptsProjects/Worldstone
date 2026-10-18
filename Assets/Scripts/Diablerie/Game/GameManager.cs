@@ -29,6 +29,7 @@ namespace Diablerie.Game
             if (AudioManager.instance != null)
                 AudioManager.instance.ResetWorldAudio();
             Level.ResetCurrent();
+            Diablerie.Engine.Gambling.Reset();
             WorldBuilder.pendingSave = null;
 
             SceneManager.LoadScene("MainMenu");

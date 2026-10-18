@@ -164,6 +164,27 @@ namespace Diablerie.Engine
             return true;
         }
 
+        // Places the item at the first free spot reading left to right, top row first. Row 0 of the
+        // screen is the highest y, because y counts up from the bottom of the grid.
+        public bool PutFromTop(Item item)
+        {
+            int width = item.info.invWidth, height = item.info.invHeight;
+            if (width <= 0 || height <= 0)
+                return false;
+
+            Item popped;
+            for (int top = 0; top + height <= sizeY; ++top)
+            {
+                int y = sizeY - top - height;
+                for (int x = 0; x + width <= sizeX; ++x)
+                {
+                    if (Put(item, x, y, out popped, maxPops: 0))
+                        return true;
+                }
+            }
+            return false;
+        }
+
         public bool Put(Item item)
         {
             Item popped;

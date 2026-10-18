@@ -10,7 +10,7 @@ No commercial use is intended. All images and sounds used are from Diablo II and
 
 # What's different from Diablerie
 
-Worldstone II adds persistence and the town features Diablerie does not have yet, and reworks the menus to follow the original game more closely.
+Worldstone II adds persistence and the town features Diablerie does not have yet (stash, waypoints, gambling), and reworks the menus to follow the original game more closely.
 
 ## Characters and saving
 * **Persistent characters.** Characters are saved to disk as JSON files (`.d2json`, with a `.bak` backup written before each save) in the game's save directory. A save stores the class, level, experience, life and mana, gold, current act, carried inventory, equipped items, the item held on the cursor, skill hotkeys with the left and right skills, and discovered waypoints.
@@ -28,9 +28,15 @@ Worldstone II adds persistence and the town features Diablerie does not have yet
   * **Deckard Cain.** Talking to Cain in town identifies every unidentified item you carry (inventory, stash, the cursor and equipment) for free, like in the original game.
   * **Scroll of Identify.** Right click the scroll in the inventory and the cursor carries the scroll. Left click an unidentified item to identify it and use up the scroll. Right click, Escape, closing the inventory or picking up an item puts the scroll away without spending it. A Tome of Identify works the same way and loses one scroll per use. The stash does not accept scrolls, move the item to the inventory first.
 * Right clicking an unidentified item no longer identifies it for free.
+* Items bought by gambling are the exception: they are identified the moment you buy them (see Gambling below).
 
 ## Town features
 * **Stash.** The stash object in town opens a stash panel built from the original MPQ art. Its grid size and position are read from the game's own `inventory.txt`. It works together with the inventory panel: move items between them, deposit all gold with a left click on the coin button, or withdraw all with a right click (limit 2,500,000). The stash is shared by all characters and saved to its own file. A stash from an older character save is migrated the first time.
+* **Gambling.** Gheed, Elzix, Alkor, Jamella and Anya offer gambling. Talking to one opens a shop panel built from the original MPQ art (`buysell`), mirrored to the left side of the screen next to your inventory. There is no Talk / Trade / Gamble dialog yet, so these NPCs go straight to the shop.
+  * **Stock.** A 10x10 grid of unknown items, filled from the top left. The base item types come from the game's own `gamble.txt`, and items of a much higher level than your character are left out. Every item is magic or better, with its quality and properties rolled when the stock is made, but nothing is shown until you buy it. Each NPC keeps their stock while your character stays at the same level and makes a new one after a level up. All stock is forgotten when a new game starts.
+  * **Buying.** Hover an item to see its base type and price (gold colored if you can afford it, red if not). Left click to buy: the gold is taken and the item, now identified, is on your cursor, ready to drop into the inventory. You can't buy with an item already on the cursor, or without enough gold. The price depends on the base item only.
+  * **Panel behaviour.** The panel closes with Escape or Space, with its close button, when you close the inventory, or when you walk away from the NPC.
+  * **Layout.** The grid is a fixed 10x10 of 29x29 pixel cells matching the artwork, rather than being read from `inventory.txt` like the stash.
 * **Waypoint system.** Waypoints can be activated in the world, are saved with the character, and can be used to travel between discovered waypoints within an act or back to any town.
 * **Waypoint panel rebuilt to match the original.** Act tabs, a "Choose your destination" header, waypoint icons, greyed-out undiscovered destinations and a close button. It is laid out like the inventory panel (320x432, mirrored to the left side of the screen).
 * **Panel behaviour.** The waypoint and stash panels close with Escape or Space, and the stash also closes when you walk away from it.

@@ -22,11 +22,34 @@ namespace Diablerie.Game.UI.Inventory
         // The stash turns this off: no using or identifying items straight from it
         public bool allowRightClick = true;
 
+        // Shops take over the grid: every click goes here instead of moving items, and the tooltip can be
+        // replaced (to show a price and keep gambled items unknown).
+        public System.Action<Vector2i, PointerEventData.InputButton> clickOverride;
+        public System.Func<Item, string> describeOverride;
+
         private Player player;
         private Engine.Inventory _inventory;
 
         private float cellSizeX;
         private float cellSizeY;
+
+        // Shops know the exact size of the artwork's cells. When set, it is used instead of dividing the
+        // rect by the inventory size, so the items always land on the cells that are drawn.
+        private bool _fixedCellSize;
+        private float _fixedCellX;
+        private float _fixedCellY;
+
+        public void SetCellSize(float width, float height)
+        {
+            _fixedCellSize = true;
+            _fixedCellX = width;
+            _fixedCellY = height;
+            if (_inventory != null && highlighter != null)
+            {
+                RefreshCellSize();
+                OnInventoryUpdate();
+            }
+        }
 
         private RawImage highlighter;
         private RectTransform rectTransform;
@@ -57,6 +80,12 @@ namespace Diablerie.Game.UI.Inventory
 
         private void RefreshCellSize()
         {
+            if (_fixedCellSize)
+            {
+                cellSizeX = _fixedCellX;
+                cellSizeY = _fixedCellY;
+                return;
+            }
             if (_inventory == null || rectTransform == null)
                 return;
             cellSizeX = rectTransform.rect.width / _inventory.sizeX;
@@ -175,6 +204,12 @@ namespace Diablerie.Game.UI.Inventory
 
         public void OnPointerDown(PointerEventData eventData)
         {
+            if (clickOverride != null)
+            {
+                clickOverride(GetPointerCell(Input.mousePosition), eventData.button);
+                return;
+            }
+
             var cell = MouseCell();
 
             // A Scroll of Identify is waiting: left click picks the item, right click puts the scroll away
@@ -305,8 +340,8 @@ namespace Diablerie.Game.UI.Inventory
         
             ClearHighlights();
 
-            var cell = MouseCell();
-            if (player.HandsItem != null)
+            var cell = clickOverride != null ? GetPointerCell(Input.mousePosition) : MouseCell();
+            if (player.HandsItem != null && clickOverride == null)
             {
                 SetRect(highlighter, cell.x, cell.y, player.HandsItem.info.invWidth, player.HandsItem.info.invHeight);
                 List<int> coveredEntries;
@@ -333,7 +368,7 @@ namespace Diablerie.Game.UI.Inventory
                     RawImage bg = itemsBackgrounds[entryIndex];
                     bg.color = Colors.InvItemHighlight;
                     Engine.Inventory.Entry entry = _inventory.entries[entryIndex];
-                    Ui.ShowScreenLabel(Input.mousePosition, entry.item.GetDescription());
+                    Ui.ShowScreenLabel(Input.mousePosition, describeOverride != null ? describeOverride(entry.item) : entry.item.GetDescription());
                 }
             }
         }
