@@ -47,6 +47,16 @@ namespace Diablerie.Game
             WaypointPanel.Show(player, entry);
         }
 
+        private static void OperateStash(Unit unit)
+        {
+            var player = WorldState.instance.Player;
+            if (player == null || unit != player.unit)
+                return;
+
+            AudioManager.instance.Play("cursor_select");
+            StashPanel.Show(player);
+        }
+
         private void Operate(StaticObject staticObject, Unit unit)
         {
             Debug.Log(unit.name + " operate " + staticObject.name + " (operateFn " + staticObject.info.operateFn + ")");
@@ -76,6 +86,10 @@ namespace Diablerie.Game
             else if (staticObject.info.operateFn == 23)
             {
                 OperateWaypoint(staticObject, unit);
+            }
+            else if (staticObject.info.operateFn == StashPanel.OperateFn)
+            {
+                OperateStash(unit);
             }
             else
             {

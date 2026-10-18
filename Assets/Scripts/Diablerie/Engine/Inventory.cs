@@ -44,6 +44,12 @@ namespace Diablerie.Engine
             }
         }
 
+        // For changes the grid can't see by itself, like an item becoming identified
+        public void NotifyChanged()
+        {
+            OnUpdate?.Invoke();
+        }
+
         public int At(int x, int y)
         {
             if (x < 0 || y < 0 || x >= sizeX || y >= sizeY)

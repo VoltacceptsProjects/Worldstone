@@ -16,6 +16,7 @@ namespace Diablerie.Engine
         public Unit unit;
         public Equipment equip;
         public Inventory inventory;
+        public Inventory stash;
         public CharStat charStat;
         public CharStatsInfo charStatInfo;
         public readonly HashSet<int> waypoints = new HashSet<int>();
@@ -29,9 +30,46 @@ namespace Diablerie.Engine
             {
                 if (_handsItem == value)
                     return;
+                // Picking something up ends identify mode
+                if (value != null)
+                    CancelIdentify();
                 _handsItem = value;
                 HandsItemChanged?.Invoke(_handsItem);
             }
+        }
+
+        // The identify scroll that is waiting for an item to be clicked, or null
+        public Item IdentifyScroll { get; private set; }
+        public event System.Action<Item> IdentifyScrollChanged;
+
+        public bool BeginIdentify(Item scroll)
+        {
+            if (!ItemIdentification.IsIdentifyItem(scroll) || HandsItem != null)
+                return false;
+            if (IdentifyScroll == scroll)
+                return true;
+            IdentifyScroll = scroll;
+            IdentifyScrollChanged?.Invoke(scroll);
+            return true;
+        }
+
+        public void CancelIdentify()
+        {
+            if (IdentifyScroll == null)
+                return;
+            IdentifyScroll = null;
+            IdentifyScrollChanged?.Invoke(null);
+        }
+
+        // Spends the pending scroll on the item. Identify mode ends when it works.
+        public bool IdentifyWithScroll(Item target)
+        {
+            if (IdentifyScroll == null)
+                return false;
+            if (!ItemIdentification.IdentifyWithScroll(this, IdentifyScroll, target))
+                return false;
+            CancelIdentify();
+            return true;
         }
 
         public delegate void OnHandsItemChangedHandler(Item item);
@@ -74,6 +112,9 @@ namespace Diablerie.Engine
             equip.charInfo = charStatInfo;
             unit.equip = equip;
             inventory = Inventory.Create(gameObject, 10, 4);
+            var stashLayout = StashLayout.Get();
+            stash = Inventory.Create(gameObject, stashLayout.columns, stashLayout.rows);
+            SaveManager.RestoreSharedStash(this, save);
             var body = gameObject.AddComponent<Rigidbody2D>();
             body.isKinematic = true;
             var collider = gameObject.AddComponent<CircleCollider2D>();

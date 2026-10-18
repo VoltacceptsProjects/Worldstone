@@ -16,6 +16,12 @@ namespace Diablerie.Game.UI.Inventory
         IPointerEnterHandler,
         IPointerExitHandler
     {
+        // Set right before AddComponent to make the grid show an inventory other than the player's own
+        public static Engine.Inventory pendingInventory;
+
+        // The stash turns this off: no using or identifying items straight from it
+        public bool allowRightClick = true;
+
         private Player player;
         private Engine.Inventory _inventory;
 
@@ -44,10 +50,27 @@ namespace Diablerie.Game.UI.Inventory
                 if (_inventory != null)
                     _inventory.OnUpdate += OnInventoryUpdate;
 
-                cellSizeX = rectTransform.rect.width / _inventory.sizeX;
-                cellSizeY = rectTransform.rect.height / _inventory.sizeY;
+                RefreshCellSize();
                 OnInventoryUpdate();
             }
+        }
+
+        private void RefreshCellSize()
+        {
+            if (_inventory == null || rectTransform == null)
+                return;
+            cellSizeX = rectTransform.rect.width / _inventory.sizeX;
+            cellSizeY = rectTransform.rect.height / _inventory.sizeY;
+        }
+
+        // Every child (items, backgrounds, highlighter) is placed from the bottom left corner of the grid rect
+        // with explicit anchors, so it no longer matters where the grid's own pivot or anchors are.
+        private static void SetBottomLeft(RectTransform rt, float x, float y)
+        {
+            rt.anchorMin = rt.anchorMax = Vector2.zero;
+            rt.pivot = Vector2.zero;
+            rt.localScale = Vector3.one;
+            rt.anchoredPosition = new Vector2(x, y);
         }
     
         private Image CreateItemImage(Item item)
@@ -55,12 +78,8 @@ namespace Diablerie.Game.UI.Inventory
             GameObject gameObject = new GameObject();
             gameObject.name = item.info.name;
             var image = gameObject.AddComponent<Image>();
-            image.transform.SetParent(transform);
-            image.rectTransform.pivot = new Vector2(0, 0);
-            image.rectTransform.localScale = new Vector3(1, 1, 1);
-            image.rectTransform.localPosition = new Vector3(0, 0, 0);
-            image.rectTransform.anchorMin = new Vector2(0, 0);
-            image.rectTransform.anchorMax = new Vector2(0, 0);
+            image.transform.SetParent(transform, false);
+            SetBottomLeft(image.rectTransform, 0, 0);
             return image;
         }
 
@@ -73,21 +92,48 @@ namespace Diablerie.Game.UI.Inventory
 
             // TODO pass the player and the inventory to the constructor (it's required to get rid of prefabs first)
             player = WorldState.instance.Player;
-            inventory = player.inventory;
+            if (pendingInventory != null)
+            {
+                inventory = pendingInventory;
+                pendingInventory = null;
+            }
+            else
+            {
+                inventory = player.inventory;
+            }
+        }
+
+        public void Bind(Player newPlayer, Engine.Inventory newInventory)
+        {
+            player = newPlayer;
+            inventory = newInventory;
         }
 
         RawImage CreateHighlighter()
         {
             GameObject gameObject = new GameObject("highlighter");
             var image = gameObject.AddComponent<RawImage>();
-            image.transform.SetParent(transform);
+            image.transform.SetParent(transform, false);
             image.color = Colors.InvItemHighlight;
-            image.rectTransform.pivot = new Vector2(0, 0);
-            image.rectTransform.localScale = new Vector3(1, 1, 1);
-            image.rectTransform.localPosition = new Vector3(0, 0, 0);
-            image.rectTransform.anchorMin = new Vector2(0, 0);
-            image.rectTransform.anchorMax = new Vector2(0, 0);
+            SetBottomLeft(image.rectTransform, 0, 0);
             return image;
+        }
+
+        private void OnEnable()
+        {
+            if (_inventory == null || highlighter == null)
+                return;
+            RefreshCellSize();
+            OnInventoryUpdate();
+        }
+
+        // The stash panel is sized after it is built, so follow any later change of the grid rect
+        private void OnRectTransformDimensionsChange()
+        {
+            if (_inventory == null || highlighter == null)
+                return;
+            RefreshCellSize();
+            OnInventoryUpdate();
         }
 
         void OnInventoryUpdate()
@@ -112,9 +158,9 @@ namespace Diablerie.Game.UI.Inventory
                     image.gameObject.SetActive(true);
                 }
             
-                image.rectTransform.localPosition = new Vector2(entry.x * cellSizeX, entry.y * cellSizeY);
                 image.sprite = entry.item.invSprite;
                 image.SetNativeSize();
+                SetBottomLeft(image.rectTransform, entry.x * cellSizeX, entry.y * cellSizeY);
 
                 bg.color = Colors.InvItemBackground;
                 SetRect(bg, entry.x, entry.y, entry.item.info.invWidth, entry.item.info.invHeight);
@@ -130,6 +176,26 @@ namespace Diablerie.Game.UI.Inventory
         public void OnPointerDown(PointerEventData eventData)
         {
             var cell = MouseCell();
+
+            // A Scroll of Identify is waiting: left click picks the item, right click puts the scroll away
+            if (player.IdentifyScroll != null)
+            {
+                if (eventData.button == PointerEventData.InputButton.Right)
+                {
+                    player.CancelIdentify();
+                }
+                else if (eventData.button == PointerEventData.InputButton.Left && allowRightClick)
+                {
+                    var target = _inventory.ItemAt(cell.x, cell.y);
+                    if (ItemIdentification.NeedsIdentifying(target) && player.IdentifyWithScroll(target))
+                    {
+                        AudioManager.instance.Play("cursor_identify_item");
+                        OnInventoryUpdate();
+                    }
+                }
+                return;
+            }
+
             if (eventData.button == PointerEventData.InputButton.Left)
             {
                 if (player.HandsItem != null)
@@ -151,16 +217,20 @@ namespace Diablerie.Game.UI.Inventory
                     }
                 }
             }
-            else if (eventData.button == PointerEventData.InputButton.Right)
+            else if (eventData.button == PointerEventData.InputButton.Right && allowRightClick)
             {
                 Item item = _inventory.ItemAt(cell.x, cell.y);
                 if (item != null)
                 {
-                    if (!item.identified)
+                    if (ItemIdentification.IsIdentifyItem(item))
                     {
-                        AudioManager.instance.Play("cursor_identify_item");
-                        item.identified = true;
-                        OnInventoryUpdate();
+                        // The scroll stays where it is until it is spent on an item
+                        if (player.BeginIdentify(item))
+                            AudioManager.instance.Play("cursor_identify_ready");
+                    }
+                    else if (!item.identified)
+                    {
+                        // Unidentified items can't be used. Identify them with Cain or a scroll.
                     }
                     else if (item.info.misc != null && item.info.misc.useable)
                     {
@@ -215,6 +285,8 @@ namespace Diablerie.Game.UI.Inventory
         {
             Vector2 pos;
             RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform, pointerPosition, Camera.main, out pos);
+            // The local point is relative to the pivot, make it relative to the bottom left corner
+            pos -= rectTransform.rect.min;
             int cellX = Mathf.FloorToInt(pos.x / cellSizeX);
             int cellY = Mathf.FloorToInt(pos.y / cellSizeY);
             return new Vector2i(cellX, cellY);
@@ -222,9 +294,8 @@ namespace Diablerie.Game.UI.Inventory
 
         private void SetRect(Graphic graphic, int x, int y, int width, int height)
         {
-            graphic.rectTransform.offsetMin = Vector2.zero;
-            graphic.rectTransform.offsetMax = new Vector2(width * cellSizeX, height * cellSizeY);
-            graphic.rectTransform.localPosition = new Vector2(x * cellSizeX, y * cellSizeY);
+            SetBottomLeft(graphic.rectTransform, x * cellSizeX, y * cellSizeY);
+            graphic.rectTransform.sizeDelta = new Vector2(width * cellSizeX, height * cellSizeY);
         }
 
         private void Update()

@@ -111,6 +111,7 @@ namespace Diablerie.Game.UI
             Debug.Log("WaypointPanel assets: background " + Describe(background) + ", icons " + Describe(_icons) + ", tabs " + Describe(_tabs));
 
             _root = MenuWidgets.NewRect("Waypoint Panel", Ui.instance.RectTransform);
+            PanelLayer.Place(_root);
             _root.anchorMin = _root.anchorMax = new Vector2(0.5f, 0.5f);
             _root.pivot = new Vector2(0, 0.5f);
             _root.anchoredPosition = new Vector2(PanelLeftEdge, PanelVerticalShift);
@@ -301,7 +302,6 @@ namespace Diablerie.Game.UI
             CharstatPanel.instance.visible = false;
 
             _root.gameObject.SetActive(true);
-            _root.SetAsLastSibling();
             SelectAct(Mathf.Clamp(origin.act, 0, _actCount - 1));
         }
 

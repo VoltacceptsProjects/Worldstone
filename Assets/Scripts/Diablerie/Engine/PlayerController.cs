@@ -163,6 +163,7 @@ namespace Diablerie.Engine
             InventoryPanel.instance.SetPlayer(player);
             OnHandsItemChanged(player.HandsItem);
             player.HandsItemChanged += OnHandsItemChanged;
+            player.IdentifyScrollChanged += OnIdentifyScrollChanged;
         }
 
         public bool Take(Item item)
@@ -178,6 +179,21 @@ namespace Diablerie.Engine
             }
 
             return took;
+        }
+
+        // While a Scroll of Identify is waiting, the cursor carries the scroll
+        private void OnIdentifyScrollChanged(Item scroll)
+        {
+            if (scroll == null)
+            {
+                OnHandsItemChanged(player.HandsItem);
+                return;
+            }
+
+            var dc6 = DC6.Load(scroll.invFile, palette, loadAllDirections: true);
+            var frame = dc6.directions[0].frames[0];
+            SoftwareCursor.SetCursor(dc6.textures[0], new Vector2(frame.width / 2, frame.height / 2));
+            Cursor.visible = false;
         }
 
         private void OnHandsItemChanged(Item item)
@@ -220,13 +236,25 @@ namespace Diablerie.Engine
             float cameraShift = 0;
             if (InventoryPanel.instance.visible)
                 cameraShift += 0.5f;
-            if (CharstatPanel.instance.visible || WaypointPanel.IsVisible)
+            if (CharstatPanel.instance.visible || WaypointPanel.IsVisible || StashPanel.IsVisible)
                 cameraShift -= 0.5f;
             cameraController.horizontalShift = cameraShift;
         }
 
         void HandleKeyboard()
         {
+            if (player != null && player.IdentifyScroll != null)
+            {
+                // Identify mode only makes sense with the inventory open. Escape puts the scroll away.
+                if (!InventoryPanel.instance.visible)
+                    player.CancelIdentify();
+                else if (Input.GetKeyDown(KeyCode.Escape))
+                {
+                    player.CancelIdentify();
+                    return;
+                }
+            }
+
             bool highlightLoot = Input.GetKey(KeyCode.LeftAlt) | Input.GetKey(KeyCode.RightAlt);
             MouseSelection.instance.SetHighlightLoot(highlightLoot);
             if (WaypointPanel.IsVisible)
@@ -234,6 +262,14 @@ namespace Diablerie.Engine
                 if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space))
                 {
                     WaypointPanel.Hide();
+                }
+            }
+            else if (StashPanel.IsVisible)
+            {
+                if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space))
+                {
+                    StashPanel.Hide();
+                    InventoryPanel.instance.visible = false;
                 }
             }
             else if (InventoryPanel.instance.visible || CharstatPanel.instance.visible)

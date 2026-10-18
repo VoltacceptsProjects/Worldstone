@@ -10,8 +10,37 @@ No commercial use is intended. All images and sounds used are from Diablo II and
 
 # What's different from Diablerie
 
+Worldstone II adds persistence and the town features Diablerie does not have yet, and reworks the menus to follow the original game more closely.
+
+## Characters and saving
+* **Persistent characters.** Characters are saved to disk as JSON files (`.d2json`, with a `.bak` backup written before each save) in the game's save directory. A save stores the class, level, experience, life and mana, gold, current act, carried inventory, equipped items, the item held on the cursor, skill hotkeys with the left and right skills, and discovered waypoints.
+* **Items survive saving.** Items are saved with their quality, level, identification state, quantity, inventory graphic, properties, and unique or set item data.
+* **Autosave.** The character is saved when entering an act, when activating a waypoint, when travelling, and when closing the stash.
+* **Save and Exit Game.** The in-game menu now has "Save and Exit Game", which saves the character and returns to the main menu. Game state, audio and the cursor are reset so another game can be started without restarting the application.
+
+## Menus
+* **Character select screen.** Single Player now opens a Diablo II style screen with up to 8 characters in a 2x4 grid, most recently played first. Double click or OK to play, plus Create New Character, Delete Character (with a confirmation dialog) and Exit. Each slot shows the character's name, level and class, the expansion marker and an animated class figure wearing the equipment from the save. The screen is built from the original MPQ art in the 800x600 menu space and scaled to fit the window, keeping its 4:3 shape. It also supports the keyboard: arrow keys, Enter, Delete and Escape.
+* **Character creation.** After picking a class you are asked for a character name (2 to 15 characters, letters plus at most one dash or underscore, no duplicates).
+* **Main menu flow.** Exiting a game returns to the main menu, and the menu scene can be loaded again without reloading the datasheets.
+
+## Items
+* **Item identification.** Magic, rare, set and unique items drop unidentified. They show their unidentified graphic and a red "Unidentified" line in the tooltip, and they can't be equipped, until they are identified in one of two ways:
+  * **Deckard Cain.** Talking to Cain in town identifies every unidentified item you carry (inventory, stash, the cursor and equipment) for free, like in the original game.
+  * **Scroll of Identify.** Right click the scroll in the inventory and the cursor carries the scroll. Left click an unidentified item to identify it and use up the scroll. Right click, Escape, closing the inventory or picking up an item puts the scroll away without spending it. A Tome of Identify works the same way and loses one scroll per use. The stash does not accept scrolls, move the item to the inventory first.
+* Right clicking an unidentified item no longer identifies it for free.
+
+## Town features
+* **Stash.** The stash object in town opens a stash panel built from the original MPQ art. Its grid size and position are read from the game's own `inventory.txt`. It works together with the inventory panel: move items between them, deposit all gold with a left click on the coin button, or withdraw all with a right click (limit 2,500,000). The stash is shared by all characters and saved to its own file. A stash from an older character save is migrated the first time.
 * **Waypoint system.** Waypoints can be activated in the world, are saved with the character, and can be used to travel between discovered waypoints within an act or back to any town.
 * **Waypoint panel rebuilt to match the original.** Act tabs, a "Choose your destination" header, waypoint icons, greyed-out undiscovered destinations and a close button. It is laid out like the inventory panel (320x432, mirrored to the left side of the screen).
+* **Panel behaviour.** The waypoint and stash panels close with Escape or Space, and the stash also closes when you walk away from it.
+
+## Display
+* **Fixed 800x600 view.** The world and UI are rendered like the original game, a fixed 800x600 pixel view. It is scaled up to fit the window, keeps its 4:3 shape and is letterboxed with black bars.
+* **Scaling fixes.** The software cursor, item tooltips and the in-game menu follow the scale of the game view.
+
+## Stability fixes
+* Event handlers are now unsubscribed when objects are destroyed, which is needed to leave a game and start another one in the same session.
 
 Everything else is inherited from Diablerie. See the upstream project for its full history.
 

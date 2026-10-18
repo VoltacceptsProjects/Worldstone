@@ -44,6 +44,7 @@ namespace Diablerie.Engine.SaveGame
                 string json = JsonUtility.ToJson(save, prettyPrint: true);
                 WriteAtomically(GetPath(save.name), json);
                 Debug.Log("Character saved: " + GetPath(save.name));
+                SaveSharedStash(player);
                 return true;
             }
             catch (Exception e)
@@ -64,6 +65,95 @@ namespace Diablerie.Engine.SaveGame
                 save = TryRead(path + BackupExtension);
             }
             return save;
+        }
+
+        // The stash is shared by all characters. ".json" so the character list (".d2json") never picks it up.
+        public static string SharedStashPath => Path.Combine(SaveDirectory, "shared_stash.json");
+
+        // Fills the stash of a freshly created player. A character save from before the stash was shared
+        // can bring its own stash along, but only while no shared stash file exists yet.
+        public static void RestoreSharedStash(Player player, CharacterSave legacy)
+        {
+            var shared = ReadSharedStash();
+            int gold;
+            List<InventoryEntrySave> entries;
+            if (shared != null)
+            {
+                gold = shared.gold;
+                entries = shared.items;
+            }
+            else if (legacy != null && (legacy.stash.Count > 0 || legacy.stashGold > 0))
+            {
+                Debug.Log("Migrating the stash of " + legacy.name + " to the shared stash");
+                gold = legacy.stashGold;
+                entries = legacy.stash;
+            }
+            else
+            {
+                return;
+            }
+
+            player.stash.gold = Mathf.Max(0, gold);
+            foreach (var entry in entries)
+            {
+                var item = ItemSerializer.FromSave(entry.item);
+                if (item == null)
+                    continue;
+
+                if (!player.stash.Put(item, entry.x, entry.y, out var popped, maxPops: 0) &&
+                    !player.stash.Put(item))
+                {
+                    Debug.LogWarning("Stash: no room for item " + item.name + ", item lost");
+                }
+            }
+        }
+
+        public static bool SaveSharedStash(Player player)
+        {
+            if (player == null || player.stash == null)
+                return false;
+
+            try
+            {
+                var data = new SharedStashSave { gold = player.stash.gold };
+                foreach (var entry in player.stash.entries)
+                {
+                    data.items.Add(new InventoryEntrySave
+                    {
+                        x = entry.x,
+                        y = entry.y,
+                        item = ItemSerializer.ToSave(entry.item),
+                    });
+                }
+                WriteAtomically(SharedStashPath, JsonUtility.ToJson(data, prettyPrint: true));
+                Debug.Log("Shared stash saved: " + SharedStashPath);
+                return true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("Failed to save the shared stash: " + e);
+                return false;
+            }
+        }
+
+        private static SharedStashSave ReadSharedStash()
+        {
+            foreach (var path in new[] { SharedStashPath, SharedStashPath + BackupExtension })
+            {
+                try
+                {
+                    if (!File.Exists(path))
+                        continue;
+                    var data = JsonUtility.FromJson<SharedStashSave>(File.ReadAllText(path));
+                    if (data != null && data.items != null)
+                        return data;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("Failed to read the shared stash '" + path + "': " + e.Message);
+                }
+            }
+            return null;
         }
 
         public static List<CharacterSaveInfo> List()

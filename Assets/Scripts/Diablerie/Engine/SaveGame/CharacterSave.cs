@@ -25,6 +25,10 @@ namespace Diablerie.Engine.SaveGame
 
         public int gold;
         public List<InventoryEntrySave> inventory = new List<InventoryEntrySave>();
+        // Legacy: the stash used to be stored per character. It is shared by all characters now
+        // (see SharedStashSave), these are only read to migrate an old save.
+        public int stashGold;
+        public List<InventoryEntrySave> stash = new List<InventoryEntrySave>();
         public List<EquippedItemSave> equipment = new List<EquippedItemSave>();
         public bool hasHandsItem;
         public ItemSave handsItem;
@@ -34,6 +38,15 @@ namespace Diablerie.Engine.SaveGame
         public string rightSkill;
 
         public List<int> waypoints = new List<int>();
+    }
+
+    // The stash shared by all characters, stored in its own file next to the character saves
+    [Serializable]
+    public class SharedStashSave
+    {
+        public int version = 1;
+        public int gold;
+        public List<InventoryEntrySave> items = new List<InventoryEntrySave>();
     }
 
     [Serializable]
