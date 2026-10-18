@@ -13,6 +13,7 @@ namespace Diablerie.Game.UI
 {
     // The gambling screen, built in code from the original MPQ art (same approach as StashPanel).
     // Left click an item to buy it: the price is taken and the item, now identified, is on your cursor.
+    // In trade mode the stock is the vendor's regular wares, and clicking with an item on the cursor sells it.
     public class GamblePanel
     {
         // Asset paths. buysell.dc6 is the merchant screen (d2data, shared by classic and the expansion).
@@ -33,6 +34,7 @@ namespace Diablerie.Game.UI
 
         // TUNE: positions inside of the panel, in pixels from the top left corner. They depend on the artwork.
         private const string TitleText = "Gamble";
+        private const string TradeTitleText = "Trade";
         // The art has an empty text bar above the buttons. Like the stash, the title sits in it, left aligned.
         private const float TitleLeftX = 22;
         private const float TitleCenterY = 368;
@@ -61,14 +63,16 @@ namespace Diablerie.Game.UI
 
         private Player _player;
         private Engine.Inventory _stock;
+        private Text _title;
+        private bool _trade;
         private Vector3 _openedAt;
 
         // Public API
         public static bool IsVisible => _instance != null && _instance._root != null && _instance._root.gameObject.activeSelf;
 
-        public static void Show(Player player, string vendorId)
+        public static void Show(Player player, string vendorId, bool trade = false)
         {
-            GetInstance(player).ShowInternal(player, vendorId);
+            GetInstance(player).ShowInternal(player, vendorId, trade);
         }
 
         public static void Hide()
@@ -143,8 +147,8 @@ namespace Diablerie.Game.UI
 
         private void BuildTitle()
         {
-            var title = MenuWidgets.Label("Title", _root, TitleText, Fonts.GetFont16(), TitleColor, TextAnchor.MiddleLeft);
-            var rect = title.rectTransform;
+            _title = MenuWidgets.Label("Title", _root, TitleText, Fonts.GetFont16(), TitleColor, TextAnchor.MiddleLeft);
+            var rect = _title.rectTransform;
             rect.anchorMin = rect.anchorMax = new Vector2(0, 1);
             rect.pivot = new Vector2(0, 0.5f);
             rect.sizeDelta = new Vector2(180, 30);
@@ -239,11 +243,13 @@ namespace Diablerie.Game.UI
         }
 
         // Behavior
-        private void ShowInternal(Player player, string vendorId)
+        private void ShowInternal(Player player, string vendorId, bool trade)
         {
             _player = player;
+            _trade = trade;
             _openedAt = player.unit.iso.pos;
-            _stock = Gambling.GetStock(vendorId, player);
+            _stock = trade ? VendorStock.GetStock(vendorId, player) : Gambling.GetStock(vendorId, player);
+            _title.text = trade ? TradeTitleText : TitleText;
 
             _grid.Bind(player, _stock);
             WaypointPanel.Hide();
@@ -269,6 +275,13 @@ namespace Diablerie.Game.UI
 
         private string Describe(Item item)
         {
+            if (_trade)
+            {
+                int tradePrice = VendorStock.BuyPrice(item);
+                bool canPay = _player != null && _player.inventory.gold >= tradePrice;
+                return item.GetDescription() + "\n<color=#" + (canPay ? PriceHex : Colors.ItemRedHex) + ">Price: " + tradePrice + " Gold</color>";
+            }
+
             int price = Gambling.Price(item);
             bool affordable = _player != null && _player.inventory.gold >= price;
             string color = affordable ? PriceHex : Colors.ItemRedHex;
@@ -279,6 +292,12 @@ namespace Diablerie.Game.UI
         {
             if (_player == null || _stock == null || button != PointerEventData.InputButton.Left)
                 return;
+
+            if (_trade)
+            {
+                OnTradeClicked(cell);
+                return;
+            }
 
             switch (Gambling.Buy(_player, _stock, cell.x, cell.y))
             {
@@ -292,6 +311,36 @@ namespace Diablerie.Game.UI
                     AudioManager.instance.Play("cursor_error");
                     break;
                 case Gambling.BuyResult.HandsNotEmpty:
+                    AudioManager.instance.Play("cursor_error");
+                    break;
+            }
+        }
+
+        private void OnTradeClicked(Vector2i cell)
+        {
+            if (_player.HandsItem != null)
+            {
+                if (VendorStock.Sell(_player, _stock))
+                {
+                    AudioManager.instance.Play("item_gold");
+                    Ui.HideScreenLabel();
+                    RefreshGold();
+                }
+                return;
+            }
+
+            switch (VendorStock.Buy(_player, _stock, cell.x, cell.y))
+            {
+                case VendorStock.BuyResult.Bought:
+                    AudioManager.instance.Play("item_gold");
+                    AudioManager.instance.Play(SoundInfo.itemPickup);
+                    Ui.HideScreenLabel();
+                    RefreshGold();
+                    break;
+                case VendorStock.BuyResult.NotEnoughGold:
+                    AudioManager.instance.Play("cursor_error");
+                    break;
+                case VendorStock.BuyResult.HandsNotEmpty:
                     AudioManager.instance.Play("cursor_error");
                     break;
             }

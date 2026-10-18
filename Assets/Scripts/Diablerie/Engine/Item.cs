@@ -42,6 +42,7 @@ namespace Diablerie.Engine
         public UniqueItem unique;
         public SetItem setItem;
         public int quantity = 1;
+        public List<MagicAffix> affixes = new List<MagicAffix>();
         Sprite _invSprite;
         bool _invSpriteIdentified;
         int invFileIndex;

@@ -1,5 +1,4 @@
 using Diablerie.Engine;
-using Diablerie.Engine.Datasheets;
 using Diablerie.Engine.Entities;
 using Diablerie.Engine.World;
 using Diablerie.Game.UI;
@@ -18,8 +17,7 @@ namespace Diablerie.Game
         {
             Events.UnitInteractionStarted -= OnInteract;
         }
-        
-        // cain1 is the caged Cain of Tristram. cain2 and up are the ones who stand in the towns.
+
         private static bool IsDeckardCain(Unit unit)
         {
             string id = unit.monStat.id;
@@ -27,22 +25,8 @@ namespace Diablerie.Game
                    !id.Equals("cain1", System.StringComparison.OrdinalIgnoreCase);
         }
 
-        // The original asks Talk / Trade / Gamble first. There is no dialog menu yet, so gamblers go straight to the shop.
-        private static void OpenGambling(Unit vendor, Unit initiator)
+        private static void IdentifyItemsForPlayer(Player player)
         {
-            var player = WorldState.instance.Player;
-            if (player == null || player.unit != initiator)
-                return;
-            GamblePanel.Show(player, vendor.monStat.id);
-        }
-
-        // "I will identify items for you at no charge."
-        private static void IdentifyItemsForPlayer(Unit initiator)
-        {
-            var player = WorldState.instance.Player;
-            if (player == null || player.unit != initiator)
-                return;
-
             int count = ItemIdentification.IdentifyAll(player);
             Debug.Log("Deckard Cain identified " + count + " item(s)");
             if (count > 0)
@@ -51,16 +35,26 @@ namespace Diablerie.Game
 
         private void OnInteract(Unit target, Unit initiator)
         {
-            if (target.monStat == null || !target.monStat.npc)
+            if (target.monStat == null || !target.monStat.npc || target.monStat.id == null)
                 return;
-            Debug.Log("Interact with " + target);
-            if (IsDeckardCain(target))
-                IdentifyItemsForPlayer(initiator);
-            else if (Gambling.IsGambler(target.monStat))
-                OpenGambling(target, initiator);
+
             initiator.LookAt(target.iso.pos);
-            var greetingSound = SoundInfo.Find(target.monStat.id + "_greeting_1");
-            AudioManager.instance.Play(greetingSound, target.transform);
+
+            var player = WorldState.instance.Player;
+            bool byPlayer = player != null && player.unit == initiator;
+            bool cain = IsDeckardCain(target);
+            bool gambler = Gambling.IsGambler(target.monStat);
+            bool vendor = VendorStock.IsVendor(target.monStat);
+
+            if (!byPlayer || (!cain && !gambler && !vendor))
+            {
+                NpcVoice.PlayGreeting(target);
+                return;
+            }
+
+            if (cain)
+                IdentifyItemsForPlayer(player);
+            NpcDialog.Show(player, target, vendor, gambler);
         }
     }
 }

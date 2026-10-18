@@ -257,7 +257,14 @@ namespace Diablerie.Engine
 
             bool highlightLoot = Input.GetKey(KeyCode.LeftAlt) | Input.GetKey(KeyCode.RightAlt);
             MouseSelection.instance.SetHighlightLoot(highlightLoot);
-            if (WaypointPanel.IsVisible)
+            if (NpcDialog.IsVisible)
+            {
+                if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space))
+                {
+                    NpcDialog.Hide();
+                }
+            }
+            else if (WaypointPanel.IsVisible)
             {
                 if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space))
                 {

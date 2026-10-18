@@ -269,6 +269,7 @@ namespace Diablerie.Engine
 
         private static void AddAffix(Item item, MagicAffix affix)
         {
+            item.affixes.Add(affix);
             foreach (var mod in affix.mods)
             {
                 if (mod.code == null)
@@ -312,6 +313,42 @@ namespace Diablerie.Engine
             // Nothing is revealed until it is bought
             item.identified = false;
             GenerateItemProperties(item);
+            GenerateItemQuantity(item);
+            return item;
+        }
+
+        // Shop stock: identified, plain or magic. Items that can't be magic stay plain.
+        public static Item GenerateForVendor(string code, int itemLevel, bool magic)
+        {
+            var item = Item.Create(code);
+            if (item == null)
+                return null;
+
+            item.level = Mathf.Max(itemLevel, item.info.level);
+            item.identified = true;
+            if (item.info.type.alwaysNormal)
+                magic = false;
+
+            if (magic || item.info.type.alwaysMagic)
+            {
+                item.quality = Item.Quality.Magic;
+                try
+                {
+                    GenerateItemProperties(item);
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning("Vendor item " + code + " could not be made magic: " + e.Message);
+                    item = Item.Create(code);
+                    item.level = Mathf.Max(itemLevel, item.info.level);
+                    item.quality = Item.Quality.Normal;
+                }
+            }
+            else
+            {
+                item.quality = Item.Quality.Normal;
+            }
+
             GenerateItemQuantity(item);
             return item;
         }

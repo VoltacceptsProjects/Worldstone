@@ -1,6 +1,7 @@
-﻿using System.Collections;
+using System.Collections;
 using Diablerie.Engine;
 using Diablerie.Engine.Entities;
+using Diablerie.Game.UI;
 using UnityEngine;
 
 public class NpcController : MonoBehaviour
@@ -22,10 +23,10 @@ public class NpcController : MonoBehaviour
 
     private void OnInteractionStarted(Unit target, Unit initiator)
     {
-        if (target != _unit)
+        if (target != _unit || !isActiveAndEnabled)
             return;
-        
-        StopCoroutine(_currentAction);
+
+        StopCurrentAction();
         _currentAction = StartCoroutine(Interact(initiator));
     }
 
@@ -37,7 +38,14 @@ public class NpcController : MonoBehaviour
 
     void OnDisable()
     {
-        StopCoroutine(_currentAction);
+        StopCurrentAction();
+    }
+
+    private void StopCurrentAction()
+    {
+        if (_currentAction != null)
+            StopCoroutine(_currentAction);
+        _currentAction = null;
     }
 
     IEnumerator WalkAround()
@@ -50,12 +58,20 @@ public class NpcController : MonoBehaviour
             yield return new WaitForSeconds(Random.Range(1f, 3f));
         }
     }
-    
+
     IEnumerator Interact(Unit initiator)
     {
         _unit.StopMoving();
         _unit.LookAt(initiator.iso.pos);
-        yield return new WaitForSeconds(3f); // TODO wait until interaction is finished
+        yield return null;
+        yield return new WaitForSeconds(0.5f);
+        while (NpcDialog.IsOpenFor(_unit) || GamblePanel.IsVisible)
+        {
+            _unit.StopMoving();
+            _unit.LookAt(initiator.iso.pos);
+            yield return null;
+        }
+        yield return new WaitForSeconds(1f);
         _currentAction = StartCoroutine(WalkAround());
     }
 }
