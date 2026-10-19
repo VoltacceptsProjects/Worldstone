@@ -1,4 +1,4 @@
-using Diablerie.Engine.IO.D2Formats;
+﻿using Diablerie.Engine.IO.D2Formats;
 using Diablerie.Engine.Utility;
 
 namespace Diablerie.Engine.World
@@ -27,17 +27,21 @@ namespace Diablerie.Engine.World
             int cellCount = width * height;
             
             for (int i = 0; i < floors.Length; ++i)
-            {
-                floors[i] = new DT1.Tile[cellCount];
-            }
+                floors[i] = Recycle(floors[i], cellCount);
             for (int i = 0; i < walls.Length; ++i)
-            {
-                walls[i] = new DT1.Tile[cellCount];
-            }
-            shadows = new DT1.Tile[cellCount];
-            specialTiles = new DT1.Tile[cellCount];
+                walls[i] = Recycle(walls[i], cellCount);
+            shadows = Recycle(shadows, cellCount);
+            specialTiles = Recycle(specialTiles, cellCount);
             
             OnReset?.Invoke();
+        }
+
+        private static DT1.Tile[] Recycle(DT1.Tile[] array, int size)
+        {
+            if (array == null || array.Length != size)
+                return new DT1.Tile[size];
+            System.Array.Clear(array, 0, size);
+            return array;
         }
 
         public void PutFloor(DT1.Tile tile, int x, int y, int layerIndex)
@@ -72,24 +76,28 @@ namespace Diablerie.Engine.World
         
         private static void ApplyTileCollisions(DT1.Tile tile, int x, int y)
         {
+            bool isFloor = tile.orientation == 0;
+            if (!isFloor && !tile.blocksMovement)
+                return;
+
             var pos = Iso.MapTileToWorld(x, y);
             var collisionMapOffset = Iso.Snap(Iso.MapToIso(pos));
+            var flags = tile.flags;
             int flagIndex = 0;
             DT1.BlockFlags mask = DT1.BlockFlags.Walk | DT1.BlockFlags.PlayerWalk;
             for (int dy = 2; dy > -3; --dy)
             {
                 for (int dx = -2; dx < 3; ++dx, ++flagIndex)
                 {
-                    Vector2i subCellPos = collisionMapOffset + new Vector2i(dx, dy);
-                    bool passable = (tile.flags[flagIndex] & mask) == 0;
-                    CollisionLayers blockedLayers = passable ? CollisionLayers.None : CollisionLayers.Walk;
-                    if (tile.orientation == 0)
+                    bool passable = (flags[flagIndex] & mask) == 0;
+                    var subCellPos = new Vector2i(collisionMapOffset.x + dx, collisionMapOffset.y + dy);
+                    if (isFloor)
                     {
-                        CollisionMap.SetBlocked(subCellPos, blockedLayers);
+                        CollisionMap.SetBlocked(subCellPos, passable ? CollisionLayers.None : CollisionLayers.Walk);
                     }
-                    else if (CollisionMap.Passable(subCellPos, CollisionLayers.Walk) && !passable)
+                    else if (!passable && CollisionMap.Passable(subCellPos, CollisionLayers.Walk))
                     {
-                        CollisionMap.SetBlocked(subCellPos, blockedLayers);
+                        CollisionMap.SetBlocked(subCellPos, CollisionLayers.Walk);
                     }
                 }
             }

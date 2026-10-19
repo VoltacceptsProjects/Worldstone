@@ -1,4 +1,6 @@
-﻿using System;
+using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using Diablerie.Engine.Datasheets;
 using Diablerie.Engine.IO.D2Formats;
@@ -21,7 +23,16 @@ namespace Diablerie.Engine.World
         string name;
         DS1[] grid;
         private int popPad;
-        DT1.Sampler tileSampler = new DT1.Sampler();
+        DT1.Sampler _tileSampler;
+        DT1.Sampler tileSampler
+        {
+            get
+            {
+                if (_tileSampler == null)
+                    InitTileSampler();
+                return _tileSampler;
+            }
+        }
         MonStat[] monStats;
         Color32[] palette;
 
@@ -71,8 +82,6 @@ namespace Diablerie.Engine.World
                 gridHeight = info.sizeY / this.gridY;
                 grid = new DS1[gridWidth * gridHeight];
             }
-
-            InitTileSampler();
         }
 
         public LevelBuilder(DS1 ds1)
@@ -87,14 +96,43 @@ namespace Diablerie.Engine.World
 
         private void InitTileSampler()
         {
-            tileSampler = new DT1.Sampler();
+            var sampler = new DT1.Sampler();
             if (info != null)
             {
                 foreach (var dt1Filename in info.type.dt1Files)
                 {
                     var dt1 = DT1.Load(dt1Filename, palette);
-                    tileSampler.Add(dt1.tiles);
+                    sampler.Add(dt1.tiles);
                 }
+            }
+            _tileSampler = sampler;
+        }
+
+        // Loads all tile sets this level needs in small steps, so that building it later does not stall a frame
+        public IEnumerator PrefetchTiles()
+        {
+            if (info != null && _tileSampler == null)
+            {
+                foreach (var dt1Filename in info.type.dt1Files)
+                {
+                    var job = DT1.BeginLoad(dt1Filename, palette);
+                    if (job == null)
+                        continue;
+                    while (!job.Step(Math.Max(0.5, TimeSlice.RemainingMs)))
+                        yield return null;
+                }
+                InitTileSampler();
+                yield return null;
+            }
+
+            foreach (var ds1 in grid)
+            {
+                if (ds1 == null || ds1.TilesReady)
+                    continue;
+                var prefetch = ds1.PrefetchTiles();
+                while (prefetch.MoveNext())
+                    yield return null;
+                yield return null;
             }
         }
 
@@ -180,14 +218,22 @@ namespace Diablerie.Engine.World
 
         public GameObject Instantiate(Vector2i offset)
         {
-            Profiler.BeginSample("LevelBuilder.Instantiate");
+            var root = BeginInstantiate(offset);
+            var content = InstantiateContent(offset, root.transform);
+            while (content.MoveNext()) { }
+            return root;
+        }
+
+        public GameObject BeginInstantiate(Vector2i offset)
+        {
             var root = new GameObject(name);
 
             if (info != null)
             {
                 var collider = root.AddComponent<PolygonCollider2D>();
                 collider.offset = Iso.MapTileToWorld(offset);
-                collider.points = Iso.CreateTileRectPoints(info.sizeX, info.sizeY);
+                var footprint = Footprint();
+                collider.points = Iso.CreateTileRectPoints(footprint.x, footprint.y);
                 collider.isTrigger = true;
 
                 var level = root.AddComponent<Level>();
@@ -196,31 +242,55 @@ namespace Diablerie.Engine.World
                 SelectMonsterTypes();
             }
 
-            InstantiateGrid(offset, root.transform);
-            InstantiateDebugGrid(offset, root.transform);
-
-            Profiler.EndSample();
             return root;
         }
 
-        private void Instantiate(DS1 ds1, int x, int y, Transform root)
+        public IEnumerator InstantiateContent(Vector2i offset, Transform root)
         {
-            Profiler.BeginSample("LevelBuilder.InstantiateDS1");
-            InstantiatePopups(ds1, x, y, root);
-            InstantiateFloors(ds1, x, y, root);
-            InstantiateShadows(ds1, x, y, root);
-            InstantiateSpecialTiles(ds1, x, y, root);
-            InstantiateWalls(ds1, x, y, root);
-            InstantiateObjects(ds1, x, y, root);
-            Profiler.EndSample();
+            int i = 0;
+            for (int y = 0; y < gridHeight; ++y)
+            {
+                for (int x = 0; x < gridWidth; ++x, ++i)
+                {
+                    var ds1 = grid[i];
+                    int offsetX = offset.x + x * gridX;
+                    int offsetY = offset.y + y * gridY;
+                    if (ds1 != null)
+                    {
+                        InstantiatePopups(ds1, offsetX, offsetY, root);
+                        InstantiateFloors(ds1, offsetX, offsetY, root);
+                        yield return null;
+                        InstantiateShadows(ds1, offsetX, offsetY, root);
+                        InstantiateSpecialTiles(ds1, offsetX, offsetY, root);
+                        yield return null;
+                        InstantiateWalls(ds1, offsetX, offsetY, root);
+                        yield return null;
+
+                        var objects = InstantiateObjects(ds1, offsetX, offsetY, root);
+                        while (objects.MoveNext())
+                            yield return null;
+
+                        var monsters = InstantiateMonsters(offsetX, offsetY, root);
+                        while (monsters.MoveNext())
+                            yield return null;
+                    }
+                    else if (info != null && info.drlgType == 3)
+                    {
+                        FillGap(offset, x, y, root);
+                        yield return null;
+
+                        var monsters = InstantiateMonsters(offsetX, offsetY, root);
+                        while (monsters.MoveNext())
+                            yield return null;
+                    }
+                }
+            }
         }
 
-        private void InstantiateMonsters(int offsetX, int offsetY, Transform root)
+        private IEnumerator InstantiateMonsters(int offsetX, int offsetY, Transform root)
         {
-            if (info == null)
-                return;
-
-            Profiler.BeginSample("LevelBuilder.InstantiateMonsters");
+            if (info == null || monStats == null || monStats.Length == 0)
+                yield break;
 
             int density = info.monDen[0];
 
@@ -233,23 +303,27 @@ namespace Diablerie.Engine.World
                         continue;
 
                     var monStat = monStats[Random.Range(0, monStats.Length)];
-                    Spawn(monStat, x, y, info.id, root);
+                    if (Spawn(monStat, x, y, info.id, root))
+                        yield return null;
                 }
             }
-            Profiler.EndSample();
         }
 
-        private static void Spawn(MonStat monStat, int x, int y, int level, Transform root)
+        private static bool Spawn(MonStat monStat, int x, int y, int level, Transform root)
         {
+            if (monStat == null)
+                return false;
+
             CollisionLayers collisionMask = CollisionLayers.Walk;
             if (!CollisionMap.Passable(new Vector2i(x, y) * Iso.SubTileCount, collisionMask, monStat.ext.sizeX))
-                return;
+                return false;
 
             int count = Random.Range(monStat.minGrp, monStat.maxGrp + 1);
             for (int i = 0; i < count; ++i)
             {
                 var mon = WorldBuilder.SpawnMonster(monStat, Iso.MapTileToWorld(x, y), root);
-                mon.level = level;
+                if (mon != null)
+                    mon.level = level;
             }
 
             if (monStat.minion1 != null)
@@ -258,9 +332,12 @@ namespace Diablerie.Engine.World
                 for (int i = 0; i < minionCount; ++i)
                 {
                     var mon = WorldBuilder.SpawnMonster(monStat.minion1, Iso.MapTileToWorld(x, y), root);
-                    mon.level = level;
+                    if (mon != null)
+                        mon.level = level;
                 }
             }
+
+            return true;
         }
 
         private void SelectMonsterTypes()
@@ -268,48 +345,24 @@ namespace Diablerie.Engine.World
             if (info == null)
                 return;
 
-            monStats = new MonStat[info.numMon];
-            int[] monsterColumns = new int[info.numMon];
-            for (int i = 0; i < info.numMon; ++i)
-                monsterColumns[i] = -1;
-
-            for (int i = 0; i < info.numMon; ++i)
+            var candidates = new List<MonStat>(info.monsters.Count);
+            foreach (var monsterId in info.monsters)
             {
-                int index;
-                do
-                {
-                    index = Random.Range(0, info.monsters.Count);
-                }
-                while (Array.IndexOf(monsterColumns, index) != -1);
-                monsterColumns[i] = index;
-                monStats[i] = MonStat.Find(info.monsters[index]);
+                var candidate = MonStat.Find(monsterId);
+                if (candidate != null)
+                    candidates.Add(candidate);
             }
-        }
 
-        private void InstantiateGrid(Vector2i offset, Transform root)
-        {
-            Profiler.BeginSample("LevelBuilder.InstantiateGrid");
-            int i = 0;
-            for (int y = 0; y < gridHeight; ++y)
+            int count = Mathf.Min(info.numMon, candidates.Count);
+            monStats = new MonStat[Mathf.Max(count, 0)];
+            for (int i = 0; i < monStats.Length; ++i)
             {
-                for (int x = 0; x < gridWidth; ++x, ++i)
-                {
-                    var ds1 = grid[i];
-                    int offsetX = offset.x + x * gridX;
-                    int offsetY = offset.y + y * gridY;
-                    if (ds1 != null)
-                    {
-                        Instantiate(ds1, offsetX, offsetY, root.transform);
-                        InstantiateMonsters(offsetX, offsetY, root.transform);
-                    }
-                    else if (info != null && info.drlgType == 3)
-                    {
-                        FillGap(offset, x, y, root.transform);
-                        InstantiateMonsters(offsetX, offsetY, root.transform);
-                    }
-                }
+                int pick = Random.Range(i, candidates.Count);
+                var chosen = candidates[pick];
+                candidates[pick] = candidates[i];
+                candidates[i] = chosen;
+                monStats[i] = chosen;
             }
-            Profiler.EndSample();
         }
 
         private void InstantiateDebugGrid(Vector2i offset, Transform root)
@@ -350,9 +403,6 @@ namespace Diablerie.Engine.World
 
         private void InstantiateFloors(DS1 ds1, int offsetX, int offsetY, Transform root)
         {
-            var layerObject = new GameObject("floors");
-            var layerTransform = layerObject.transform;
-            layerTransform.SetParent(root);
 
             for (int f = 0; f < ds1.floors.Length; ++f)
             {
@@ -381,9 +431,6 @@ namespace Diablerie.Engine.World
 
         private void InstantiateShadows(DS1 ds1, int offsetX, int offsetY, Transform root)
         {
-            var layerObject = new GameObject("shadows");
-            var layerTransform = layerObject.transform;
-            layerTransform.SetParent(root);
 
             int i = 0;
             for (int y = 0; y < ds1.height - 1; ++y)
@@ -411,9 +458,6 @@ namespace Diablerie.Engine.World
         {
             for (int w = 0; w < ds1.walls.Length; ++w)
             {
-                var layerObject = new GameObject("special_tiles " + (w + 1));
-                var layerTransform = layerObject.transform;
-                layerTransform.SetParent(root);
 
                 var cells = ds1.walls[w];
                 int i = 0;
@@ -439,9 +483,6 @@ namespace Diablerie.Engine.World
         {
             for (int w = 0; w < ds1.walls.Length; ++w)
             {
-                var layerObject = new GameObject("walls " + (w + 1));
-                var layerTransform = layerObject.transform;
-                layerTransform.SetParent(root);
                 var sampler = ds1.tileSampler;
 
                 var cells = ds1.walls[w];
@@ -493,6 +534,8 @@ namespace Diablerie.Engine.World
                 int targetLevelId = info.vis[cell.mainIndex];
                 int warpId = info.warp[cell.mainIndex];
                 var targetLevel = LevelInfo.Find(targetLevelId);
+                if (targetLevel == null)
+                    return;
                 var levelWarpInfo = LevelWarpInfo.Find(warpId);
                 if (levelWarpInfo == null)
                 {
@@ -503,17 +546,32 @@ namespace Diablerie.Engine.World
             }
         }
 
-        private void InstantiateObjects(DS1 ds1, int offsetX, int offsetY, Transform root)
+        private static readonly HashSet<string> warnedPresets = new HashSet<string>();
+
+        private IEnumerator InstantiateObjects(DS1 ds1, int offsetX, int offsetY, Transform root)
         {
             offsetX *= Iso.SubTileCount;
             offsetY *= Iso.SubTileCount;
             int monsterLevel = info != null ? info.id : 1;
-            foreach (var spawnInfo in ds1.objects)
+            var objects = ds1.objects;
+            if (objects == null)
+                yield break;
+
+            for (int i = 0; i < objects.Length; ++i)
             {
+                var spawnInfo = objects[i];
                 var preset = spawnInfo.preset;
+                if (preset == null)
+                    continue;
+
                 bool created = CreateObject(preset, offsetX + spawnInfo.x, offsetY + spawnInfo.y, monsterLevel, root);
                 if (!created)
-                    Debug.LogWarning("Failed to instantiate objects from \"" + ds1.filename + "\" act " + preset.act + ", type " + preset.type + ", id " + preset.id);
+                {
+                    string key = preset.act + "/" + preset.type + "/" + preset.id;
+                    if (warnedPresets.Add(key))
+                        Debug.LogWarning("Failed to instantiate objects from \"" + ds1.filename + "\" act " + preset.act + ", type " + preset.type + ", id " + preset.id + " (further occurrences suppressed)");
+                }
+                yield return null;
             }
         }
 
@@ -542,11 +600,7 @@ namespace Diablerie.Engine.World
             if (obj.type == 2)
             {
                 if (obj.objectId >= ObjectInfo.sheet.Count)
-                {
-                    var go = new GameObject("spawn failure");
-                    go.transform.position = pos;
                     return false;
-                }
                 ObjectInfo objectInfo = ObjectInfo.sheet[obj.objectId];
                 var staticObject = WorldBuilder.SpawnObject(objectInfo, pos, parent: root);
                 staticObject.SetMode(obj.mode);
@@ -577,14 +631,18 @@ namespace Diablerie.Engine.World
             if (superUnique != null)
             {
                 var monster = WorldBuilder.SpawnMonster(superUnique.monStat, pos, root);
-                monster.gameObject.name = superUnique.nameStr;
-                monster.title = superUnique.name;
-                monster.level = level;
+                if (monster != null)
+                {
+                    monster.gameObject.name = superUnique.nameStr;
+                    monster.title = superUnique.name;
+                    monster.level = level;
+                }
                 int minionCount = Random.Range(superUnique.minGrp, superUnique.maxGrp + 1);
                 for (int i = 0; i < minionCount; ++i)
                 {
                     var minion = WorldBuilder.SpawnMonster(superUnique.monStat, pos, root);
-                    minion.level = level;
+                    if (minion != null)
+                        minion.level = level;
                 }
                 return true;
             }
@@ -604,7 +662,8 @@ namespace Diablerie.Engine.World
                 for (int i = 0; i < 4; ++i)
                 {
                     var fallen = WorldBuilder.SpawnMonster("fallen1", pos, root);
-                    fallen.level = level;
+                    if (fallen != null)
+                        fallen.level = level;
                 }
                 return true;
             }
@@ -617,6 +676,20 @@ namespace Diablerie.Engine.World
             }
 
             return false;
+        }
+
+        // Maze levels only use an 8x8 room grid even though Levels.txt reserves 200x200 tiles for them.
+        // The trigger area has to match what was built, otherwise neighbouring levels would overlap.
+        public static Vector2i Footprint(LevelInfo info)
+        {
+            if (info.maze != null)
+                return new Vector2i(Mathf.Min(info.sizeX, info.maze.sizeX * 8), Mathf.Min(info.sizeY, info.maze.sizeY * 8));
+            return new Vector2i(info.sizeX, info.sizeY);
+        }
+
+        public Vector2i Footprint()
+        {
+            return Footprint(info);
         }
 
         public Vector2i FindEntry()

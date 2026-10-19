@@ -1,7 +1,9 @@
-﻿using System.Collections;
+using System.Collections;
 using Diablerie.Engine;
 using Diablerie.Engine.Datasheets;
 using Diablerie.Engine.Entities;
+using Diablerie.Engine.IO.D2Formats;
+using Diablerie.Engine.Quest;
 using Diablerie.Engine.SaveGame;
 using Diablerie.Engine.World;
 using Diablerie.Game.AI;
@@ -28,6 +30,13 @@ namespace Diablerie.Game.World
         private void Awake()
         {
             instance = this;
+            QuestManager.EnsureExists();
+            if (GetComponent<Diablerie.Engine.Automap>() == null)
+                gameObject.AddComponent<Diablerie.Engine.Automap>();
+            if (GetComponent<UnitActivity>() == null)
+                gameObject.AddComponent<UnitActivity>();
+            if (GetComponent<Act1QuestSetup>() == null)
+                gameObject.AddComponent<Act1QuestSetup>();
         }
 
         private void Start()
@@ -39,6 +48,7 @@ namespace Diablerie.Game.World
         {
             PlayerController.instance.enabled = false;
             MouseSelection.instance.enabled = false;
+            DCC.Unthrottled = true;
             LoadingScreen.Show(0.5f);  // It's not zero due to preceding Unity scene load
             ScreenFader.SetToBlack();
             yield return null;
@@ -86,6 +96,7 @@ namespace Diablerie.Game.World
             MouseSelection.instance.enabled = true;
             LoadingScreen.Hide();
             ScreenFader.FadeToClear();
+            DCC.Unthrottled = false;
         }
 
         public static void SaveCurrentPlayer()
@@ -98,6 +109,7 @@ namespace Diablerie.Game.World
         static Act CreateAct(int actNumber)
         {
             WorldState.instance.Grid.Reset();
+            Warp.ClearRegistry();
             if (actNumber == 1)
             {
                 return new Act1();
@@ -172,9 +184,18 @@ namespace Diablerie.Game.World
                 return null;
             }
 
+            bool hostile = summoner == null &&
+                           !(monStat.ai == "Npc" || monStat.ai == "Towner" || monStat.ai == "Vendor" || monStat.ai == "Hireable") &&
+                           monStat.ai != "Idle" && monStat.ai != "NpcStationary";
+
             var monster = new GameObject(monStat.nameStr);
             monster.transform.SetParent(parent);
             monster.transform.position = Iso.MapToWorld(pos);
+
+            // Monsters created far from the player (streamed levels) stay inactive until the player gets close,
+            // so they cost nothing at all in the meantime. UnitActivity wakes them up.
+            if (hostile && UnitActivity.IsFar(pos))
+                monster.SetActive(false);
         
             CollisionMap.Move(pos, pos, monStat.ext.sizeX, monster);
 
@@ -224,6 +245,9 @@ namespace Diablerie.Game.World
                 unit.party = Party.Evil;
                 monster.AddComponent<MonsterController>();
             }
+
+            if (hostile)
+                UnitActivity.Register(unit);
 
             var body = monster.AddComponent<Rigidbody2D>();
             body.isKinematic = true;

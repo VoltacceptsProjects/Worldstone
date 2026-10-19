@@ -1,4 +1,5 @@
 ﻿using Diablerie.Engine;
+using Diablerie.Engine.Quest;
 using Diablerie.Engine.UI;
 using Diablerie.Game.World;
 using UnityEditor;
@@ -33,6 +34,8 @@ namespace Diablerie.Game
             NpcVoice.Reset();
             Diablerie.Engine.VendorStock.Reset();
             WorldBuilder.pendingSave = null;
+            if (QuestManager.Instance != null)
+                Object.Destroy(QuestManager.Instance.gameObject);
 
             SceneManager.LoadScene("MainMenu");
         }

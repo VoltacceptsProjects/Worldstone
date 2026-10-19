@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Diablerie.Engine.IO.D2Formats;
 using UnityEngine;
 
@@ -10,6 +10,13 @@ namespace Diablerie.Engine
 
         public int directionCount;
         public abstract Sprite[] GetSprites(int direction);
+
+        // Like GetSprites, but may decline when decoding would blow the frame budget. Try again next frame.
+        public virtual bool TryGetSprites(int direction, out Sprite[] sprites)
+        {
+            sprites = GetSprites(direction);
+            return true;
+        }
 
         public static Spritesheet Load(string filename, PaletteType paletteType = PaletteType.Act1)
         {

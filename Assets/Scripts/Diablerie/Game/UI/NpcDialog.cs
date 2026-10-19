@@ -4,6 +4,7 @@ using Diablerie.Engine;
 using Diablerie.Engine.Datasheets;
 using Diablerie.Engine.Entities;
 using Diablerie.Engine.UI;
+using Diablerie.Engine.Quest;
 using Diablerie.Game.UI.Menu.CharacterSelect;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -319,6 +320,7 @@ namespace Diablerie.Game.UI
             WaypointPanel.Hide();
             StashPanel.Hide();
             GamblePanel.Hide();
+            QuestPanel.Hide();
 
             Build(trade, gamble);
             _root.gameObject.SetActive(true);
@@ -334,8 +336,12 @@ namespace Diablerie.Game.UI
 
             var labels = new List<string>();
             var actions = new List<System.Action>();
+            
+            // The menu entry is always "Talk": what the NPC says (introduction, quest line, gossip)
+            // is picked by Act1Dialog when it is clicked
             labels.Add(Label("TalkMenu", "talk"));
             actions.Add(OnTalk);
+            
             if (trade)
             {
                 labels.Add(Label("NPCMenuTrade", "trade"));
@@ -345,6 +351,11 @@ namespace Diablerie.Game.UI
             {
                 labels.Add(Label("gamble", "gamble"));
                 actions.Add(OnGamble);
+            }
+            if (CanTravelEast())
+            {
+                labels.Add(Label("To Lut Gholein", "travel east"));
+                actions.Add(OnTravelEast);
             }
             labels.Add(Label("cancel", "cancel"));
             actions.Add(HideInternal);
@@ -501,7 +512,22 @@ namespace Diablerie.Game.UI
         private void OnTalk()
         {
             StopVoice();
-            _voice = NpcVoice.PlayTalk(_npc, _player);
+            _voice = Act1Dialog.Talk(_npc, _player);
+        }
+
+        // Warriv takes the caravan to Lut Gholein once Andariel is dead
+        private bool CanTravelEast()
+        {
+            if (_npc == null || _npc.monStat == null || NpcVoice.VoiceOf(_npc) != "warriv")
+                return false;
+            var qm = QuestManager.Instance;
+            return qm != null && qm.IsQuestComplete("A1Q6") && Diablerie.Game.World.WorldBuilder.CurrentActNumber == 1;
+        }
+
+        private void OnTravelEast()
+        {
+            HideInternal();
+            Diablerie.Game.World.WorldBuilder.LoadAct(2);
         }
 
         private void OnTrade()

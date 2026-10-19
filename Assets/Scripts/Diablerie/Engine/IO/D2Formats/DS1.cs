@@ -1,6 +1,8 @@
-﻿using System.Collections.Generic;
+using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using Diablerie.Engine.Datasheets;
+using Diablerie.Engine.Utility;
 using UnityEngine;
 
 namespace Diablerie.Engine.IO.D2Formats
@@ -17,7 +19,39 @@ namespace Diablerie.Engine.IO.D2Formats
         public ObjectSpawnInfo[] objects;
         public List<Group> groups;
         public string[] dt1Files;
-        public DT1.Sampler tileSampler;
+        private DT1.Sampler _tileSampler;
+        private int _act;
+        private Color32[] _palette;
+
+        // Built on first use. LevelStreamer prefetches the DT1 files in time slices first,
+        // so normally this only assembles the sampler from already cached tiles.
+        public DT1.Sampler tileSampler
+        {
+            get
+            {
+                if (_tileSampler == null && dt1Files != null)
+                    _tileSampler = GetSampler(_act, dt1Files, _palette);
+                return _tileSampler;
+            }
+        }
+
+        public bool TilesReady => _tileSampler != null || dt1Files == null;
+
+        // Loads the DT1 files of this DS1 a little at a time, stopping when the frame budget is used up
+        public IEnumerator PrefetchTiles()
+        {
+            if (_tileSampler != null || dt1Files == null)
+                yield break;
+            foreach (var dt1Filename in dt1Files)
+            {
+                var job = DT1.BeginLoad(dt1Filename, _palette);
+                if (job == null)
+                    continue;
+                while (!job.Step(System.Math.Max(0.5, TimeSlice.RemainingMs)))
+                    yield return null;
+            }
+            _tileSampler = GetSampler(_act, dt1Files, _palette);
+        }
 
         public struct ObjectSpawnInfo
         {
@@ -53,10 +87,28 @@ namespace Diablerie.Engine.IO.D2Formats
         };
 
         static Dictionary<string, DS1> cache = new Dictionary<string, DS1>();
+        static Dictionary<string, DT1.Sampler> samplerCache = new Dictionary<string, DT1.Sampler>();
 
         public static void ResetCache()
         {
             cache.Clear();
+            samplerCache.Clear();
+        }
+
+        static DT1.Sampler GetSampler(int act, string[] dt1Files, Color32[] palette)
+        {
+            string key = act + "|" + string.Join("|", dt1Files);
+            if (samplerCache.TryGetValue(key, out var sampler))
+                return sampler;
+
+            sampler = new DT1.Sampler();
+            foreach (var dt1Filename in dt1Files)
+            {
+                var dt1 = DT1.Load(dt1Filename, palette);
+                sampler.Add(dt1.tiles);
+            }
+            samplerCache[key] = sampler;
+            return sampler;
         }
 
         public static DS1 Load(string filename, bool mpq = true)
@@ -70,11 +122,9 @@ namespace Diablerie.Engine.IO.D2Formats
             UnityEngine.Profiling.Profiler.BeginSample("DS1.Load");
             try
             {
-                var sw = System.Diagnostics.Stopwatch.StartNew();
                 byte[] bytes = mpq ? Mpq.ReadAllBytes(filename) : File.ReadAllBytes(filename);
                 var ds1 = Load(bytes);
                 ds1.filename = filename;
-                Debug.Log(Path.GetFileName(filename) + " loaded in " + sw.ElapsedMilliseconds + " ms");
                 cache[lowerFilename] = ds1;
                 return ds1;
             }
@@ -111,12 +161,8 @@ namespace Diablerie.Engine.IO.D2Formats
                 {
                     var palette = Palette.GetPalette(act);
                     ds1.dt1Files = ReadDependencies(reader);
-                    ds1.tileSampler = new DT1.Sampler();
-                    foreach (var dt1Filename in ds1.dt1Files)
-                    {
-                        var dt1 = DT1.Load(dt1Filename, palette);
-                        ds1.tileSampler.Add(dt1.tiles);
-                    }
+                    ds1._act = act;
+                    ds1._palette = palette;
                 }
 
                 if ((ds1.version >= 9) && (ds1.version <= 13))
@@ -358,13 +404,13 @@ namespace Diablerie.Engine.IO.D2Formats
 
             for (int i = 0; i < fileCount; i++)
             {
-                string dependency = "";
-                char c;
-                while ((c = reader.ReadChar()) != 0)
+                var builder = new System.Text.StringBuilder(64);
+                byte c;
+                while ((c = reader.ReadByte()) != 0)
                 {
-                    dependency += c;
+                    builder.Append((char)c);
                 }
-                dependency = dependency.ToLower();
+                string dependency = builder.ToString().ToLower();
                 dependency = dependency.Replace(".tg1", ".dt1");
                 dependency = dependency.Replace(@"c:\d2\", "");
                 dependency = dependency.Replace(@"\d2\", "");

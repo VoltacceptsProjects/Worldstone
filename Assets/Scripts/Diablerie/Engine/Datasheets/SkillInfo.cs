@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Diablerie.Engine.Entities;
 using Diablerie.Engine.IO.D2Formats;
 using Diablerie.Engine.LibraryExtensions;
@@ -288,38 +288,48 @@ namespace Diablerie.Engine.Datasheets
             {
                 // raise skeleton, raise skeletal mage
                 var pos = Iso.MapToWorld(target);
+                global::Diablerie.Game.AI.PetController.EnforceLimit(self, summon, 12);
                 var monster = global::Diablerie.Game.World.WorldBuilder.SpawnMonster(summon, pos, summoner: self);
-                monster.overrideMode = summode;
+                if (monster != null)
+                    monster.overrideMode = summode;
                 Missile.Create(clientMissileA, target, target, self);
             }
             else if (srvDoFunc == 45)
             {
                 // traps
                 var pos = Iso.MapToWorld(target);
+                global::Diablerie.Game.AI.PetController.EnforceLimit(self, summon, 12);
                 var monster = global::Diablerie.Game.World.WorldBuilder.SpawnMonster(summon, pos, summoner: self);
-                monster.overrideMode = summode;
+                if (monster != null)
+                    monster.overrideMode = summode;
                 Missile.Create(clientMissileA, target, target, self);
             }
             else if (srvDoFunc == 56 || srvDoFunc == 57)
             {
                 // 57 iron golem, 56 other golems
                 var pos = Iso.MapToWorld(target);
+                global::Diablerie.Game.AI.PetController.EnforceLimit(self, summon, 12);
                 var monster = global::Diablerie.Game.World.WorldBuilder.SpawnMonster(summon, pos, summoner: self);
-                monster.overrideMode = summode;
+                if (monster != null)
+                    monster.overrideMode = summode;
             }
             else if (srvDoFunc == 114)
             {
                 // raven
                 var pos = Iso.MapToWorld(target);
+                global::Diablerie.Game.AI.PetController.EnforceLimit(self, summon, 12);
                 var monster = global::Diablerie.Game.World.WorldBuilder.SpawnMonster(summon, pos, summoner: self);
-                monster.overrideMode = summode;
+                if (monster != null)
+                    monster.overrideMode = summode;
             }
             else if (srvDoFunc == 119)
             {
                 // summon grizzly, wolves, spirits
                 var pos = Iso.MapToWorld(target);
+                global::Diablerie.Game.AI.PetController.EnforceLimit(self, summon, 12);
                 var monster = global::Diablerie.Game.World.WorldBuilder.SpawnMonster(summon, pos, summoner: self);
-                monster.overrideMode = summode;
+                if (monster != null)
+                    monster.overrideMode = summode;
             }
             else if (srvDoFunc == 68)
             {

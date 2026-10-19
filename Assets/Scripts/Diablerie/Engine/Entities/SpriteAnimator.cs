@@ -38,7 +38,7 @@ namespace Diablerie.Engine.Entities
         private void Awake()
         {
             _renderer = GetComponent<SpriteRenderer>();
-            _renderer.material = Materials.Normal;
+            _renderer.sharedMaterial = Materials.Normal;
         }
 
         public void SetTrigger(int frame, System.Action action)

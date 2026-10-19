@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using Diablerie.Engine;
 using Diablerie.Engine.AI;
 using Diablerie.Engine.Datasheets;
@@ -22,11 +22,21 @@ namespace Diablerie.Game.AI
 
         void OnEnable()
         {
+            target = null;
             StartCoroutine(Roam());
+        }
+
+        void OnDisable()
+        {
+            // Monsters far from the player are deactivated, do not leave stale loops behind
+            StopAllCoroutines();
+            target = null;
         }
 
         private IEnumerator Roam()
         {
+            // Spread the first look around so that a whole group does not scan in the same frame
+            yield return new WaitForSeconds(Random.Range(0f, 1f));
             while (!target)
             {
                 Unit nearestEnemy = AIUtils.GetNearestEnemy(_unit, viewRadius);
@@ -56,6 +66,8 @@ namespace Diablerie.Game.AI
 
         private bool IsAttackable(Unit target)
         {
+            if (target == null)
+                return false;
             bool targetTooFar = Vector2.Distance(target.iso.pos, _unit.iso.pos) > maxAgroDistance;
             return !targetTooFar && AIUtils.IsAttackable(_unit, target);
         }

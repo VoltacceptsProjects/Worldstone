@@ -8,6 +8,9 @@ namespace Diablerie.Engine.Entities
     {
         private Unit _unit;
         private COFRenderer _renderer;
+        private string _lastMode;
+        private string _lastWeaponClass;
+        private bool _loaded;
         
         private void Awake()
         {
@@ -24,7 +27,13 @@ namespace Diablerie.Engine.Entities
                 weaponClass = "HTH";
             }
 
-            _renderer.cof = COF.Load(_unit.basePath, _unit.token, weaponClass, mode);
+            if (!_loaded || mode != _lastMode || weaponClass != _lastWeaponClass)
+            {
+                _loaded = true;
+                _lastMode = mode;
+                _lastWeaponClass = weaponClass;
+                _renderer.cof = COF.Load(_unit.basePath, _unit.token, weaponClass, mode);
+            }
             _renderer.direction = _unit.DirectionIndex;
             _renderer.frame = _unit.AnimationFrame;
         }

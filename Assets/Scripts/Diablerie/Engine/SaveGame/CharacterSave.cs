@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Diablerie.Engine.Quest;
 
 namespace Diablerie.Engine.SaveGame
 {
@@ -38,6 +39,9 @@ namespace Diablerie.Engine.SaveGame
         public string rightSkill;
 
         public List<int> waypoints = new List<int>();
+        
+        // Quest data
+        public QuestSaveData questData;
     }
 
     // The stash shared by all characters, stored in its own file next to the character saves

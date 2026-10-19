@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -29,27 +29,32 @@ namespace Diablerie.Engine.IO.D2Formats
 
         public static Color32[] GetPalette(int act)
         {
-            try
-            {
-                var paletteType = (PaletteType) act;
-                return GetPalette(paletteType);
-            }
-            catch
-            {
-                return GetPalette(PaletteType.Act1);
-            }
+            var paletteType = (PaletteType) act;
+            return PaletteMappings.ContainsKey(paletteType) ? GetPalette(paletteType) : GetPalette(PaletteType.Act1);
         }
         
         public static Color32[] GetPalette(PaletteType paletteType)
         {
-            return Palettes.ContainsKey(paletteType) ? Palettes[paletteType] : LoadPalette(paletteType);
+            return Palettes.TryGetValue(paletteType, out var cached) ? cached : LoadPalette(paletteType);
         }
         
         public static Texture2D GetPaletteTexture(PaletteType paletteType)
         {
-            return Textures.ContainsKey(paletteType) ? Textures[paletteType] : CreateTexture(paletteType);
+            return Textures.TryGetValue(paletteType, out var cached) ? cached : CreateTexture(paletteType);
         }
         
+        private static readonly Dictionary<Color32[], Texture2D> SharedTextures = new Dictionary<Color32[], Texture2D>();
+
+        public static Texture2D GetSharedTexture(Color32[] palette)
+        {
+            if (!SharedTextures.TryGetValue(palette, out var texture) || texture == null)
+            {
+                texture = CreateTexture(palette);
+                SharedTextures[palette] = texture;
+            }
+            return texture;
+        }
+
         public static Texture2D CreateTexture(Color32[] palette)
         {
             Texture2D texture = new Texture2D(256, 1, TextureFormat.RGBA32, false);

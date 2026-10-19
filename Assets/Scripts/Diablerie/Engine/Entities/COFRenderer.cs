@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.IO;
 using Diablerie.Engine.IO.D2Formats;
 using Diablerie.Engine.Utility;
@@ -16,7 +16,6 @@ namespace Diablerie.Engine.Entities
         private COF _cof;
         private string[] _equip;
         private bool _selected = false;
-        private Material _shadowMaterial;
         private bool _configChanged = false;
         private List<Layer> _layers = new List<Layer>();
 
@@ -93,7 +92,6 @@ namespace Diablerie.Engine.Entities
 
         private void Awake()
         {
-            _shadowMaterial = new Material(Materials.Shadow);
         }
 
         private void LateUpdate()
@@ -113,12 +111,22 @@ namespace Diablerie.Engine.Entities
                 if (!layer.gameObject.activeSelf)
                     continue;
                 int sheetDirection = direction * layer.spritesheet.directionCount / Unit.DirectionCount;
-                layer.renderer.sprite = layer.spritesheet.GetSprites(sheetDirection)[showFrame];
+                if (!layer.spritesheet.TryGetSprites(sheetDirection, out var layerSprites))
+                    continue; // not decoded yet, keep showing what is there and ask again next frame
+                var sprite = layerSprites[showFrame];
+                if (layer.renderer.sprite != sprite)
+                {
+                    layer.renderer.sprite = sprite;
+                    layer.shadow.sprite = sprite;
+                }
                 layer.renderer.sortingOrder = sortingOrder;
-                layer.shadow.sprite = layer.renderer.sprite;
                 var pos = layer.transform.position;
-                pos.z = -i * 0.01f;
-                layer.transform.position = pos;
+                float z = -i * 0.01f;
+                if (pos.z != z)
+                {
+                    pos.z = z;
+                    layer.transform.position = pos;
+                }
             }
         }
 
@@ -141,7 +149,7 @@ namespace Diablerie.Engine.Entities
                 shadowObject.transform.SetParent(layer.transform, false);
                 shadowObject.transform.localScale = new Vector3(1, 0.5f);
                 layer.shadow = shadowObject.AddComponent<SpriteRenderer>();
-                layer.shadow.material = _shadowMaterial;
+                layer.shadow.sharedMaterial = Materials.Shadow;
                 layer.shadow.sortingLayerID = SortingLayers.Shadow;
                 _layers.Add(layer);
             }
@@ -170,7 +178,7 @@ namespace Diablerie.Engine.Entities
                     layer.gameObject.SetActive(false);
                     continue;
                 }
-                layer.renderer.material = cofLayer.material;
+                layer.renderer.sharedMaterial = cofLayer.material;
                 layer.gameObject.SetActive(true);
                 layer.shadow.gameObject.SetActive(cofLayer.shadow && shadow);
                 _layers[i] = layer;

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Diablerie.Engine.Entities;
 using Diablerie.Engine.UI;
 using Diablerie.Engine.Utility;
@@ -144,9 +144,13 @@ namespace Diablerie.Engine
             Entity bestMatch = null;
             foreach (var entity in WorldState.instance.Entities)
             {
+                var delta = entity.transform.position - mousePos;
+                if (delta.x > 8f || delta.x < -8f || delta.y > 8f || delta.y < -8f)
+                    continue;
+
                 if (!entity.selectable)
                     continue;
-                
+
                 if (entity == WorldState.instance.Player.unit)
                     continue;
 

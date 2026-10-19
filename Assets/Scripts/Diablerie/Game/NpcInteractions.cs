@@ -42,18 +42,23 @@ namespace Diablerie.Game
 
             var player = WorldState.instance.Player;
             bool byPlayer = player != null && player.unit == initiator;
-            bool cain = IsDeckardCain(target);
-            bool gambler = Gambling.IsGambler(target.monStat);
-            bool vendor = VendorStock.IsVendor(target.monStat);
-
-            if (!byPlayer || (!cain && !gambler && !vendor))
+            if (!byPlayer)
             {
                 NpcVoice.PlayGreeting(target);
                 return;
             }
 
+            bool cain = IsDeckardCain(target);
+            bool gambler = Gambling.IsGambler(target.monStat);
+            bool vendor = VendorStock.IsVendor(target.monStat);
+
+            // Quest items are handed in as soon as the player walks up to the NPC
+            Act1Dialog.RunHandIns(target, player);
+
             if (cain)
                 IdentifyItemsForPlayer(player);
+
+            // Every talkable NPC gets the menu (Talk, plus Trade / Gamble / Travel where they apply)
             NpcDialog.Show(player, target, vendor, gambler);
         }
     }

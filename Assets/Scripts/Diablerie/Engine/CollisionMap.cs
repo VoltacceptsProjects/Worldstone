@@ -1,4 +1,5 @@
-﻿using Diablerie.Engine.Utility;
+﻿using System.Collections.Generic;
+using Diablerie.Engine.Utility;
 using UnityEngine;
 
 namespace Diablerie.Engine
@@ -16,17 +17,23 @@ namespace Diablerie.Engine
         private int width;
         private int height;
         private int origin;
-        private Cell[] map;
+        // Flags live in a flat byte array (one byte per sub-cell), the few cells that are occupied
+        // by a game object are kept in a sparse dictionary. A full Cell[] for the whole world
+        // would need hundreds of megabytes.
+        private byte[] blocked;
+        private Dictionary<int, GameObject> objects = new Dictionary<int, GameObject>();
+        private bool warnedOutOfBounds;
 
         public CollisionMap(int width, int height)
         {
             instance = this;
             this.width = width;
             this.height = height;
-            map = new Cell[width * height];
-            for (int i = 0; i < map.Length; ++i)
+            blocked = new byte[width * height];
+            blocked[0] = (byte)CollisionLayers.All;
+            for (int filled = 1; filled < blocked.Length; filled <<= 1)
             {
-                map[i].blocked = CollisionLayers.All;
+                System.Array.Copy(blocked, 0, blocked, filled, System.Math.Min(filled, blocked.Length - filled));
             }
             origin = width * 5 + 5;
         }
@@ -51,7 +58,15 @@ namespace Diablerie.Engine
         {
             var tilePos = Iso.Snap(pos);
             int index = instance.MapToIndex(tilePos);
-            return instance.map[index];
+            return instance.GetCell(index);
+        }
+
+        private Cell GetCell(int index)
+        {
+            var cell = new Cell();
+            cell.blocked = (CollisionLayers)blocked[index];
+            objects.TryGetValue(index, out cell.gameObject);
+            return cell;
         }
 
         public static bool Passable(Vector3 pos, CollisionLayers mask, int size = 1, GameObject ignore = null)
@@ -67,7 +82,7 @@ namespace Diablerie.Engine
 
         public static bool Passable(int index, CollisionLayers mask, int size = 1, GameObject ignore = null)
         {
-            if (index - size - size * instance.width < 0 || index + size + size * instance.width >= instance.map.Length)
+            if (index - size - size * instance.width < 0 || index + size + size * instance.width >= instance.blocked.Length)
                 return false;
         
             index = index - size / 2 - size / 2 * instance.height;
@@ -77,11 +92,12 @@ namespace Diablerie.Engine
                 int end = index + size;
                 while (index < end)
                 {
-                    var cell = instance.map[index];
-                    bool passable = (cell.blocked & mask) == 0;
-                    if (!passable && (ignore == null || ignore != cell.gameObject))
+                    bool passable = ((CollisionLayers)instance.blocked[index] & mask) == 0;
+                    if (!passable)
                     {
-                        return false;
+                        instance.objects.TryGetValue(index, out var occupant);
+                        if (ignore == null || ignore != occupant)
+                            return false;
                     }
                     ++index;
                 }
@@ -99,7 +115,18 @@ namespace Diablerie.Engine
         public static void SetBlocked(Vector2i pos, CollisionLayers value)
         {
             int index = instance.MapToIndex(pos);
-            instance.map[index].blocked = value;
+            if (pos.x < -5 || pos.y < -5 || pos.x >= instance.width - 5 || pos.y >= instance.height - 5)
+            {
+                // Outside of the map: happens when a level is placed beyond the world bounds
+                if (!instance.warnedOutOfBounds)
+                {
+                    instance.warnedOutOfBounds = true;
+                    Debug.LogWarning("CollisionMap.SetBlocked out of bounds: " + pos.x + ", " + pos.y +
+                                     " (map is " + instance.width + "x" + instance.height + "), further warnings suppressed");
+                }
+                return;
+            }
+            instance.blocked[index] = (byte)value;
         }
 
         public static void SetPassable(Vector3 pos, int sizeX, int sizeY, bool passable, GameObject gameObject)
@@ -117,18 +144,17 @@ namespace Diablerie.Engine
                 int end = index + sizeX;
                 while (index < end)
                 {
-                    Cell cell = instance.map[index];
-                    if (passable && cell.gameObject == gameObject)
+                    instance.objects.TryGetValue(index, out var occupant);
+                    var cellBlocked = (CollisionLayers)instance.blocked[index];
+                    if (passable && occupant == gameObject)
                     {
-                        cell.blocked = CollisionLayers.None;
-                        cell.gameObject = null;
-                        instance.map[index] = cell;
+                        instance.blocked[index] = (byte)CollisionLayers.None;
+                        instance.objects.Remove(index);
                     }
-                    else if (!passable && cell.blocked == CollisionLayers.None)
+                    else if (!passable && cellBlocked == CollisionLayers.None)
                     {
-                        cell.blocked = layers;
-                        cell.gameObject = gameObject;
-                        instance.map[index] = cell;
+                        instance.blocked[index] = (byte)layers;
+                        instance.objects[index] = gameObject;
                     }
                     ++index;
                 }
@@ -162,12 +188,11 @@ namespace Diablerie.Engine
             for (int i = 0; i < stepCount; ++i)
             {
                 pos += step;
-                Cell cell = GetCell(pos);
                 bool passable = Passable(pos, mask, size, ignore);
                 if (!passable)
                 {
-                    hit.hit = !passable;
-                    hit.gameObject = cell.gameObject;
+                    hit.hit = true;
+                    hit.gameObject = GetCell(pos).gameObject;
                     hit.pos = pos;
                     break;
                 }
@@ -187,7 +212,7 @@ namespace Diablerie.Engine
             {
                 for(int column = 0; column < columns; ++column)
                 {
-                    var gameObject = instance.map[index + column].gameObject;
+                    instance.objects.TryGetValue(index + column, out var gameObject);
                     if (gameObject != null)
                     {
                         result[count] = gameObject;
@@ -216,7 +241,7 @@ namespace Diablerie.Engine
             for(int i = 1; i < maxIterations; ++i, sign=-sign)
             {
                 int end = index + sign * i;
-                for (; index != end && index > size && index < instance.map.Length - size - 1; index += sign)
+                for (; index != end && index > size && index < instance.blocked.Length - size - 1; index += sign)
                 {
                     if (Passable(index, mask, size))
                     {
@@ -227,7 +252,7 @@ namespace Diablerie.Engine
 
                 end = index - sign * i * instance.width;
                 int step = -sign * instance.width;
-                for (; index != end && index > size && index < instance.map.Length - size - 1; index += step)
+                for (; index != end && index > size && index < instance.blocked.Length - size - 1; index += step)
                 {
                     if (Passable(index, mask, size))
                     {

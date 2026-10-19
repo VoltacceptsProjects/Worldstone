@@ -25,15 +25,15 @@ namespace Diablerie.Engine.Entities
 
         public virtual Bounds bounds
         {
-            get { return _renderer.bounds; }
+            get { return _renderer != null ? _renderer.bounds : new Bounds(transform.position, Vector3.zero); }
         }
 
         public virtual bool selectable => true;
 
         public virtual bool selected
         {
-            get { return _renderer.selected; }
-            set { _renderer.selected = value; }
+            get { return _renderer != null && _renderer.selected; }
+            set { if (_renderer != null) _renderer.selected = value; }
         }
 
         public string title

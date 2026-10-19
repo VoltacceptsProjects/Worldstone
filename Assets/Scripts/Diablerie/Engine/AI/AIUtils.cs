@@ -17,13 +17,16 @@ namespace Diablerie.Engine.AI
             {
                 var collider = visibleColliders[i];
                 var visibleUnit = collider.GetComponent<Unit>();
-                if (visibleUnit == null)
+                if (visibleUnit == null || visibleUnit == requester)
                     continue;
                 if (IsAttackable(requester, visibleUnit))
                 {
                     float distance = Vector2.Distance(visibleUnit.iso.pos, requester.iso.pos);
                     if (nearest == null || distance < minDistance)
+                    {
                         nearest = visibleUnit;
+                        minDistance = distance;
+                    }
                 }
             }
 

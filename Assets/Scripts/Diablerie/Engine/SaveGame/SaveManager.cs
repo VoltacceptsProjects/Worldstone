@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Diablerie.Engine.Datasheets;
+using Diablerie.Engine.Quest;
 using UnityEngine;
 
 namespace Diablerie.Engine.SaveGame
@@ -241,6 +242,13 @@ namespace Diablerie.Engine.SaveGame
             if (PlayerController.instance != null)
                 PlayerController.instance.WriteSkills(save);
 
+            // Save quest data
+            var questManager = QuestManager.Instance;
+            if (questManager != null)
+            {
+                save.questData = QuestSaveData.FromRuntime(questManager);
+            }
+
             return save;
         }
 
@@ -293,6 +301,16 @@ namespace Diablerie.Engine.SaveGame
 
             player.unit.health = Mathf.Clamp(save.health, 1, player.unit.maxHealth);
             player.unit.mana = Mathf.Clamp(save.mana, 0, player.unit.maxMana);
+
+            // Restore quest data
+            if (save.questData != null)
+            {
+                var questManager = QuestManager.Instance;
+                if (questManager != null)
+                {
+                    save.questData.ApplyToRuntime(questManager);
+                }
+            }
         }
 
         private static CharacterSave TryRead(string path)

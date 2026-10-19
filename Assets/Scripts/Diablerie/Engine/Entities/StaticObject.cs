@@ -24,6 +24,9 @@ namespace Diablerie.Engine.Entities
         public float AnimationTime => _animationTime;
         public float AnimationDuration => _animationDuration;
 
+        // Event for when this object is operated on
+        public System.Action<Unit> onOperate;
+
         protected override void Awake()
         {
             base.Awake();
@@ -68,6 +71,7 @@ namespace Diablerie.Engine.Entities
 
         public override void Operate(Unit unit)
         {
+            onOperate?.Invoke(unit);
             Events.InvokeStaticObjectOperate(this, unit);
         }
 

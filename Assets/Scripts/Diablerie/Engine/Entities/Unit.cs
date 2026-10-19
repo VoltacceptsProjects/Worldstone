@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Diablerie.Engine.Datasheets;
 using Diablerie.Engine.IO.D2Formats;
 using Diablerie.Engine.Utility;
@@ -61,6 +61,10 @@ namespace Diablerie.Engine.Entities
         private int _animationFrame;
         private AnimData _animData;
         
+        // Monsters far from the player are switched off by UnitActivity; set for units it manages
+        [System.NonSerialized]
+        public bool canSleep;
+
         public string Mode => _mode;
 
         public int DirectionIndex => _directionIndex;
@@ -90,7 +94,9 @@ namespace Diablerie.Engine.Entities
             MoveToTargetPoint();
             Turn();
             UpdateAnimation();
+#if DIABLERIE_DEBUG_UNITS
             Iso.DebugDrawTile(iso.pos, party == Party.Good ? Color.green : Color.red, 0.3f);
+#endif
         }
 
         #endregion
@@ -273,25 +279,46 @@ namespace Diablerie.Engine.Entities
             }
         }
 
+        // A path is rebuilt only when it ran out, the target moved away from where it was built for,
+        // or the interval passed - not every frame
+        private const float RepathDistance = 2f;
+        private float _nextRepathTime;
+        private Vector2 _pathTarget;
+
         private void MoveToTargetPoint()
         {
             _hasMoved = false;
             if (!_moving || _dead || _dying || _resurrecting || _usingSkill || overrideMode != null)
                 return;
 
-            var newPath = Pathing.BuildPath(iso.pos, _targetPoint, size: size, self: gameObject);
-            if (newPath.Count == 0)
+            bool isPlayer = monStat == null;
+            bool needPath = path.Count == 0 ||
+                            Time.time >= _nextRepathTime ||
+                            (_targetPoint - _pathTarget).sqrMagnitude > RepathDistance * RepathDistance;
+
+            if (needPath && Pathing.TryBeginSearch(isPlayer))
             {
-                _moving = false;
-                return;
+                _nextRepathTime = Time.time + (isPlayer ? 0.1f : Random.Range(0.3f, 0.5f));
+                _pathTarget = _targetPoint;
+                var newPath = Pathing.BuildPath(iso.pos, _targetPoint, size: size, self: gameObject);
+                if (newPath.Count == 0)
+                {
+                    AbortPath();
+                    _moving = false;
+                    return;
+                }
+                if (path.Count == 0 || newPath[newPath.Count - 1].pos != path[path.Count - 1].pos)
+                {
+                    AbortPath();
+                    path.AddRange(newPath);
+                }
             }
+
+            if (path.Count == 0)
+                return; // waiting for a turn at the pathfinder
+
             _hasMoved = true;
-            if (path.Count == 0 || newPath[newPath.Count - 1].pos != path[path.Count - 1].pos)
-            {
-                AbortPath();
-                path.AddRange(newPath);
-            }
-        
+
             if (path.Count == 1 && Vector2.Distance(path[0].pos, _targetPoint) < 1.0f)
             {
                 // smooth straightforward movement
@@ -381,6 +408,8 @@ namespace Diablerie.Engine.Entities
         {
             UpdateMode();
             _animationTime += Time.deltaTime;
+            if (_animationTime > 1f)
+                _animationTime = 1f;
             while (_animationTime >= _animData.frameDuration && _animData.frameDuration > 0)
             {
                 _animationTime -= _animData.frameDuration;
@@ -420,6 +449,7 @@ namespace Diablerie.Engine.Entities
             {
                 _dying = false;
                 _dead = true;
+                CorpseReaper.Add(this);
             }
             UpdateMode();
         }

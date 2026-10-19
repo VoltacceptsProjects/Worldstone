@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.IO;
 using Diablerie.Engine.Utility;
 using UnityEngine;
@@ -82,11 +82,35 @@ namespace Diablerie.Engine.IO.D2Formats
             public int textureY;
         }
 
+        // Four palette indices per cell stored inline: no array per entry
         struct PixelBufferEntry
         {
-            public byte[] val;
+            public bool valid;
+            public byte v0, v1, v2, v3;
             public int frame;
             public int frameCellIndex;
+
+            public byte Get(int i)
+            {
+                switch (i)
+                {
+                    case 0: return v0;
+                    case 1: return v1;
+                    case 2: return v2;
+                    default: return v3;
+                }
+            }
+
+            public void Set(int i, byte value)
+            {
+                switch (i)
+                {
+                    case 0: v0 = value; break;
+                    case 1: v1 = value; break;
+                    case 2: v2 = value; break;
+                    default: v3 = value; break;
+                }
+            }
         }
 
         class Streams
@@ -297,6 +321,26 @@ namespace Diablerie.Engine.IO.D2Formats
             }
         }
 
+        // Two reusable pixel buffers (current and previous texture of a direction) instead of a new
+        // multi-megabyte array per decoded direction. Equal cells are copied from the previous frame,
+        // which can sit on the previous texture, hence two.
+        static Color32[][] scratch = new Color32[2][];
+
+        static Color32[] AcquireScratch(int index, int length)
+        {
+            var buffer = scratch[index];
+            if (buffer == null || buffer.Length != length)
+            {
+                buffer = new Color32[length];
+                scratch[index] = buffer;
+            }
+            else
+            {
+                System.Array.Clear(buffer, 0, length);
+            }
+            return buffer;
+        }
+
         static PixelBufferEntry[] pixelBuffer = new PixelBufferEntry[DCC_MAX_PB_ENTRY];
 
         static void FillPixelBuffer(Header header, FrameBuffer frameBuffer, Direction dir, Streams streams)
@@ -319,7 +363,7 @@ namespace Diablerie.Engine.IO.D2Formats
                     for (int x = 0; x < frame.nb_cell_w; ++x, ++frameCellIndex)
                     {
                         int curr_cell = buffCellIndex + x;
-                        if (cellBuffer[curr_cell].val != null)
+                        if (cellBuffer[curr_cell].valid)
                         {
                             if (streams.equalCell != null && streams.equalCell.ReadBool() != 0)
                                 continue;
@@ -372,8 +416,10 @@ namespace Diablerie.Engine.IO.D2Formats
                         // we have the 4 pixels code for the new entry in pixel_buffer
                         PixelBufferEntry old_entry = cellBuffer[curr_cell];
                         pb_idx++;
+                        if (pb_idx + 1 >= DCC_MAX_PB_ENTRY)
+                            throw new InvalidDataException("DCC pixel buffer overflow");
                         var newEntry = new PixelBufferEntry();
-                        newEntry.val = new byte[4];
+                        newEntry.valid = true;
                         int curr_idx = decoded_pix - 1;
 
                         for (int i = 0; i < 4; i++)
@@ -381,10 +427,10 @@ namespace Diablerie.Engine.IO.D2Formats
                             if ((pixelMask & (1 << i)) != 0)
                             {
                                 if (curr_idx >= 0) // if stack is not empty, pop it
-                                    newEntry.val[i] = (byte)read_pixel[curr_idx--];
+                                    newEntry.Set(i, (byte)read_pixel[curr_idx--]);
                             }
                             else
-                                newEntry.val[i] = old_entry.val[i];
+                                newEntry.Set(i, old_entry.Get(i));
                         }
                         newEntry.frame = f;
                         newEntry.frameCellIndex = frameCellIndex;
@@ -400,8 +446,8 @@ namespace Diablerie.Engine.IO.D2Formats
             {
                 for (int x = 0; x < 4; x++)
                 {
-                    int y = pixelBuffer[i].val[x];
-                    pixelBuffer[i].val[x] = dir.pixel_values[y];
+                    int y = pixelBuffer[i].Get(x);
+                    pixelBuffer[i].Set(x, dir.pixel_values[y]);
                 }
             }
 
@@ -418,6 +464,7 @@ namespace Diablerie.Engine.IO.D2Formats
             var packer = new TexturePacker(textureWidth, textureHeight);
             Texture2D texture = null;
             Color32[] pixels = null;
+            int scratchIndex = 1;
 
             for (int c = 0; c < frameBuffer.cells.Length; c++)
             {
@@ -438,10 +485,11 @@ namespace Diablerie.Engine.IO.D2Formats
                     if (texture != null)
                     {
                         texture.SetPixels32(pixels);
-                        texture.Apply(false);
+                        texture.Apply(false, true);
                     }
                     texture = new Texture2D(textureWidth, textureHeight, TextureFormat.RGBA32, false);
-                    pixels = new Color32[textureWidth * textureHeight];
+                    scratchIndex = 1 - scratchIndex;
+                    pixels = AcquireScratch(scratchIndex, textureWidth * textureHeight);
                     textures.Add(texture);
                 }
                 frame.texture = texture;
@@ -489,7 +537,7 @@ namespace Diablerie.Engine.IO.D2Formats
                     {
                         // fill the frame cell with pixels
 
-                        if (pbe.val[0] == pbe.val[1])
+                        if (pbe.Get(0) == pbe.Get(1))
                         {
                             // fill FRAME cell to color val[0]
                             //clear_to_color(cell->bmp, pbe->val[0]);
@@ -497,7 +545,7 @@ namespace Diablerie.Engine.IO.D2Formats
                         else
                         {
                             int nb_bit;
-                            if (pbe.val[1] == pbe.val[2])
+                            if (pbe.Get(1) == pbe.Get(2))
                                 nb_bit = 1;
                             else
                                 nb_bit = 2;
@@ -511,7 +559,7 @@ namespace Diablerie.Engine.IO.D2Formats
                                 for (int x = 0; x < cell.w; ++x)
                                 {
                                     int pix = streams.pixelCode.ReadLessThanByte(nb_bit);
-                                    Color32 color = palette[pbe.val[pix]];
+                                    Color32 color = palette[pbe.Get(pix)];
                                     frame.texturePixels[offset + x] = color;
                                 }
                                 offset -= textureWidth;
@@ -534,12 +582,61 @@ namespace Diablerie.Engine.IO.D2Formats
             if (texture != null)
             {
                 texture.SetPixels32(pixels);
-                texture.Apply(false);
+                texture.Apply(false, true); // upload and drop the CPU copy, textures are never read back
             }
+
+            // the scratch buffers must not keep frames of this direction alive
+            for (int f = 0; f < header.framesPerDir; f++)
+                dir.frames[f].texturePixels = null;
         }
 
         readonly static int[] widthTable = { 0, 1, 2, 4, 6, 8, 10, 12, 14, 16, 20, 24, 26, 28, 30, 32 };
         readonly static int[] nb_pix_table = { 0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4 };
+
+        // Decoding a direction is the most expensive thing that happens while playing, and a pack of monsters
+        // turning around can ask for dozens at once. Per frame only a few milliseconds go to decoding,
+        // the rest wait for the next frames (at least one decode per frame, so nothing starves).
+        public const double FrameBudgetMs = 2.0;
+        public static bool Unthrottled;
+        private static int budgetFrame = -1;
+        private static int decodesThisFrame;
+        private static double decodeMsThisFrame;
+
+        static bool HasBudget()
+        {
+            if (Unthrottled)
+                return true;
+            int frame = Time.frameCount;
+            if (frame != budgetFrame)
+            {
+                budgetFrame = frame;
+                decodesThisFrame = 0;
+                decodeMsThisFrame = 0;
+            }
+            return decodesThisFrame == 0 || decodeMsThisFrame < FrameBudgetMs;
+        }
+
+        public override bool TryGetSprites(int d, out Sprite[] result)
+        {
+            if (sprites[d] == null)
+            {
+                if (!HasBudget())
+                {
+                    result = null;
+                    return false;
+                }
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                DecodeDirection(d);
+                if (!Unthrottled)
+                {
+                    ++decodesThisFrame;
+                    decodeMsThisFrame += clock.Elapsed.TotalMilliseconds;
+                }
+            }
+
+            result = sprites[d];
+            return true;
+        }
 
         public override Sprite[] GetSprites(int d)
         {
@@ -552,6 +649,30 @@ namespace Diablerie.Engine.IO.D2Formats
         void DecodeDirection(int directionIndex)
         {
             UnityEngine.Profiling.Profiler.BeginSample("DCC.DecodeDirection");
+            try
+            {
+                DecodeDirectionUnchecked(directionIndex);
+            }
+            catch (InvalidDataException e)
+            {
+                // Leave the direction blank instead of breaking the renderer every frame
+                Debug.LogWarning(filename + ": " + e.Message);
+                sprites[directionIndex] = new Sprite[header.framesPerDir];
+            }
+            finally
+            {
+                UnityEngine.Profiling.Profiler.EndSample();
+            }
+
+            // Once everything has been decoded the compressed data is not needed anymore
+            if (++decodedDirections >= header.directionCount)
+                bytes = null;
+        }
+
+        int decodedDirections;
+
+        void DecodeDirectionUnchecked(int directionIndex)
+        {
             int internalIndex = DirectionMapping.MapToInternal(header.directionCount, directionIndex);
             sprites[directionIndex] = new Sprite[header.framesPerDir];
             var bitReader = new BitReader(bytes, header.dirOffset[internalIndex] * 8);
@@ -596,8 +717,6 @@ namespace Diablerie.Engine.IO.D2Formats
             FrameBuffer frameBuffer = CreateFrameBuffer(dir.box); // dcc_prepare_buffer_cells
             FillPixelBuffer(header, frameBuffer, dir, streams); // dcc_fill_pixel_buffer
             MakeFrames(header, dir, frameBuffer, streams, textures, sprites[directionIndex], palette); // dcc_make_frames
-
-            UnityEngine.Profiling.Profiler.EndSample();
         }
 
         public static DCC Load(string filename, Color32[] palette, bool loadAllDirections = false, bool mpq = true)

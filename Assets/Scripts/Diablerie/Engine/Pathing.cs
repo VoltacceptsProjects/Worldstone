@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Diablerie.Engine.Utility;
 using UnityEngine;
@@ -79,6 +79,29 @@ namespace Diablerie.Engine
             {
                 pool.Add(this);
             }
+        }
+
+        // Searches allowed per frame and the time they may take together; units that do not get a turn
+        // keep following their current path and ask again on the next frame
+        public const int MaxSearchesPerFrame = 8;
+        public const double MaxSearchMsPerFrame = 3.0;
+        private static int budgetFrame = -1;
+        private static int searchesThisFrame;
+        private static double searchMsThisFrame;
+
+        public static bool TryBeginSearch(bool priority)
+        {
+            int frame = Time.frameCount;
+            if (frame != budgetFrame)
+            {
+                budgetFrame = frame;
+                searchesThisFrame = 0;
+                searchMsThisFrame = 0;
+            }
+            if (!priority && (searchesThisFrame >= MaxSearchesPerFrame || searchMsThisFrame >= MaxSearchMsPerFrame))
+                return false;
+            ++searchesThisFrame;
+            return true;
         }
 
         private static List<Step> path = new List<Step>();
@@ -162,21 +185,24 @@ namespace Diablerie.Engine
         private static void TraverseBack(Node node)
         {
             UnityEngine.Profiling.Profiler.BeginSample("TraverseBack");
+            int start = path.Count;
             while (node.parent != null)
             {
                 Collapse(node);
                 Step step = new Step();
                 step.direction = node.pos - node.parent.pos;
                 step.pos = node.pos;
-                path.Insert(0, step);
+                path.Add(step);
                 node = node.parent;
             }
+            path.Reverse(start, path.Count - start);
             UnityEngine.Profiling.Profiler.EndSample();
         }
 
         public static List<Step> BuildPath(Vector2 from_, Vector2 target_, float minRange = 0.1f, int size = 2, GameObject self = null, int depth = 100)
         {
             UnityEngine.Profiling.Profiler.BeginSample("BuildPath");
+            var searchClock = System.Diagnostics.Stopwatch.StartNew();
             Vector2i from = Iso.Snap(from_);
             target = Iso.Snap(target_);
             path.Clear();
@@ -228,6 +254,7 @@ namespace Diablerie.Engine
             //{
             //    Iso.DebugDrawTile(node.pos, Color.green, 0.3f);
             //}
+            searchMsThisFrame += searchClock.Elapsed.TotalMilliseconds;
             UnityEngine.Profiling.Profiler.EndSample();
             return path;
         }

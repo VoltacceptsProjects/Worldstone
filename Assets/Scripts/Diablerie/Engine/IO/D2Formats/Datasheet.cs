@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -51,12 +51,9 @@ namespace Diablerie.Engine.IO.D2Formats
             if (filename == null)
                 filename = locations[typeof(T)];
             Profiler.BeginSample("Datasheet.Load");
-            var stopwatch = Stopwatch.StartNew();
 
             Profiler.BeginSample("File.ReadAllText");
-            var fileSw = Stopwatch.StartNew();
             string csv = File.ReadAllText(Application.streamingAssetsPath + "/" + filename);
-            var fileReadMs = fileSw.ElapsedMilliseconds;
             Profiler.EndSample();
 
             Loader<T> loader = GetLoader<T>();
@@ -86,7 +83,6 @@ namespace Diablerie.Engine.IO.D2Formats
                 }
                 records.Add(obj);
             }
-            Debug.Log("Load " + filename + " (" + records.Count + " records, elapsed " + stopwatch.Elapsed.Milliseconds + " ms, file read " + fileReadMs + " ms)");
             Profiler.EndSample();
             return records;
         }

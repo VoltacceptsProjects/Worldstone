@@ -1,4 +1,4 @@
-﻿using Diablerie.Engine.Datasheets;
+using Diablerie.Engine.Datasheets;
 using Diablerie.Engine.Utility;
 using UnityEngine;
 
@@ -11,6 +11,8 @@ namespace Diablerie.Engine.World
             public LevelPreset[] rooms;
             public LevelPreset[] themedRooms;
             public LevelPreset[][] special;
+            // Optional: directions (bit 0 W, 1 E, 2 S, 3 N) each special room may open towards, 0xf when null
+            public int[] specialMasks;
         }
 
         struct Room
@@ -32,9 +34,16 @@ namespace Diablerie.Engine.World
         public static void Generate(LevelBuilder builder, Palette palette)
         {
             UnityEngine.Profiling.Profiler.BeginSample("Maze.Generate");
-            Clear();
-            GenerateRooms(builder.info.maze.rooms[0]);
-            GenerateSpecialRooms(palette);
+            // A layout can leave no valid place for a special room, retry with a new one instead of spinning forever
+            for (int attempt = 0; attempt < 16; ++attempt)
+            {
+                Clear();
+                GenerateRooms(builder.info.maze.rooms[0]);
+                if (GenerateSpecialRooms(palette))
+                    break;
+                if (attempt == 15)
+                    Debug.LogWarning("Maze: failed to place all special rooms for " + builder.info.levelName);
+            }
             Build(builder, palette);
             UnityEngine.Profiling.Profiler.EndSample();
         }
@@ -81,22 +90,38 @@ namespace Diablerie.Engine.World
             }
         }
 
-        private static void GenerateSpecialRooms(Palette palette)
+        private static bool GenerateSpecialRooms(Palette palette)
         {
+            bool allPlaced = true;
             for (int specialIndex = 0; specialIndex < palette.special.Length; ++specialIndex)
             {
-                Vector2i pos;
+                Vector2i pos = new Vector2i(0, 0);
                 int dirMask = 0;
-                do
+                bool found = false;
+
+                // Random tries first, then a full scan, so that this always terminates
+                for (int attempt = 0; attempt < 64 && !found; ++attempt)
                 {
                     pos = new Vector2i(
                         Random.Range(0, grid.GetLength(0)),
                         Random.Range(0, grid.GetLength(1)));
-                    if (grid[pos.x, pos.y].fill)
-                        continue;
-                    dirMask = GenerateDirMask(pos.x, pos.y);
+                    found = TrySpecialMask(palette, specialIndex, pos, out dirMask);
                 }
-                while (dirMask == 0);
+
+                for (int x = 0; x < grid.GetLength(0) && !found; ++x)
+                {
+                    for (int y = 0; y < grid.GetLength(1) && !found; ++y)
+                    {
+                        pos = new Vector2i(x, y);
+                        found = TrySpecialMask(palette, specialIndex, pos, out dirMask);
+                    }
+                }
+
+                if (!found)
+                {
+                    allPlaced = false;
+                    continue;
+                }
 
                 int dirIndex = Random.Range(0, 4);
                 while ((dirMask & (1 << dirIndex)) == 0)
@@ -110,6 +135,18 @@ namespace Diablerie.Engine.World
                     dirMask = dirMask
                 };
             }
+            return allPlaced;
+        }
+
+        private static bool TrySpecialMask(Palette palette, int specialIndex, Vector2i pos, out int dirMask)
+        {
+            dirMask = 0;
+            if (grid[pos.x, pos.y].fill)
+                return false;
+            dirMask = GenerateDirMask(pos.x, pos.y);
+            if (palette.specialMasks != null && specialIndex < palette.specialMasks.Length)
+                dirMask &= palette.specialMasks[specialIndex];
+            return dirMask != 0;
         }
 
         private static void Build(LevelBuilder builder, Palette palette)
@@ -132,13 +169,16 @@ namespace Diablerie.Engine.World
             if (room.special)
             {
                 int index = SpecialIndex(room.dirMask);
-                builder.Place(palette.special[room.specialIndex][index], new Vector2i(x, y));
+                var specialPreset = index >= 0 ? palette.special[room.specialIndex][index] : null;
+                if (specialPreset != null)
+                    builder.Place(specialPreset, new Vector2i(x, y));
             }
             else
             {
                 int index = GenerateDirMask(x, y);
                 LevelPreset[] set = Random.Range(0, 2) == 0 ? palette.rooms : palette.themedRooms;
-                builder.Place(set[index], new Vector2i(x, y));
+                if (set[index] != null)
+                    builder.Place(set[index], new Vector2i(x, y));
             }
         }
 

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Diablerie.Engine.Datasheets;
 using Diablerie.Engine.Entities;
+using Diablerie.Engine.World;
 using UnityEngine;
 
 namespace Diablerie.Engine
@@ -119,6 +120,11 @@ namespace Diablerie.Engine
             _entries[staticObject] = entry;
         }
 
+        public static bool IsWaypoint(StaticObject staticObject)
+        {
+            return staticObject != null && _entries.ContainsKey(staticObject);
+        }
+
         public static void ClearWorld()
         {
             _objects.Clear();
@@ -153,12 +159,17 @@ namespace Diablerie.Engine
             return player.waypoints.Add(entry.index);
         }
 
+        private static bool IsStreamable(Entry entry)
+        {
+            return LevelStreamer.Current != null && LevelStreamer.Current.Has(entry.level.id);
+        }
+
         public static bool CanTravel(Player player, Entry entry, int currentAct)
         {
             if (!IsUsable(player, entry))
                 return false;
             if (entry.act == currentAct)
-                return GetObject(entry) != null;
+                return GetObject(entry) != null || IsStreamable(entry);
             return entry.isTown;
         }
 
@@ -178,6 +189,12 @@ namespace Diablerie.Engine
         {
             isoPosition = Vector3.zero;
             var staticObject = GetObject(entry);
+            if (staticObject == null && IsStreamable(entry))
+            {
+                // The level with this waypoint has not been built yet
+                LevelStreamer.Current.EnsureLoaded(entry.level.id);
+                staticObject = GetObject(entry);
+            }
             if (staticObject == null)
                 return false;
 

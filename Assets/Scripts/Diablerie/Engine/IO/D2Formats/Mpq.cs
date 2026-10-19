@@ -23,14 +23,11 @@ namespace Diablerie.Engine.IO.D2Formats
         public static byte[] ReadAllBytes(string filename)
         {
             UnityEngine.Profiling.Profiler.BeginSample("Mpq.ReadAllBytes");
-            var sw = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 using (var stream = fs.OpenFile(filename))
                 {
-                    byte[] bytes = stream.ReadAllBytes();
-                    UnityEngine.Debug.Log("Mpq.ReadAllBytes " + filename + " " + sw.ElapsedMilliseconds + " ms");
-                    return bytes;
+                    return stream.ReadAllBytes();
                 }
             }
             finally

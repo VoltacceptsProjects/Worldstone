@@ -1,4 +1,5 @@
-﻿using Diablerie.Engine.Datasheets;
+using System.Collections.Generic;
+using Diablerie.Engine.Datasheets;
 using Diablerie.Engine.Entities;
 using UnityEngine;
 
@@ -12,6 +13,15 @@ namespace Diablerie.Engine.World
         new Transform transform;
         Vector3 selectOffset;
         Vector3 selectSize;
+
+        // LevelWarpInfo is shared by every level that uses the same warp art, so the warp a level
+        // leads to is looked up by (level the warp is in, level it leads to) instead
+        static readonly Dictionary<(int from, int to), Warp> registry = new Dictionary<(int from, int to), Warp>();
+
+        public static void ClearRegistry()
+        {
+            registry.Clear();
+        }
 
         public static Warp Create(int x, int y, LevelWarpInfo warpInfo, LevelInfo sourceLevel, LevelInfo targetLevel, Transform parent)
         {
@@ -31,6 +41,7 @@ namespace Diablerie.Engine.World
             warp.selectOffset = new Vector3(warpInfo.selectX, -warpInfo.selectY) / Iso.pixelsPerUnit;
             warp.selectOffset += new Vector3(warp.selectSize.x, -warp.selectSize.y) / 2;
             warpInfo.instance = warp;
+            registry[(sourceLevel.id, targetLevel.id)] = warp;
             return warp;
         }
 
@@ -55,16 +66,9 @@ namespace Diablerie.Engine.World
 
         private Warp FindTargetWarp()
         {
-            for (int i = 0; i < targetLevel.vis.Length; ++i)
-            {
-                if (targetLevel.vis[i] == sourceLevel.id)
-                {
-                    int warpId = targetLevel.warp[i];
-                    Warp warp = LevelWarpInfo.Find(warpId).instance;
-                    if (warp != null)
-                        return warp;
-                }
-            }
+            // The warp in the target level that leads back to the level this one is in
+            if (registry.TryGetValue((targetLevel.id, sourceLevel.id), out var warp) && warp != null)
+                return warp;
 
             return null;
         }
@@ -72,6 +76,12 @@ namespace Diablerie.Engine.World
         public override void Operate(Unit unit)
         {
             var targetWarp = FindTargetWarp();
+            if (targetWarp == null && LevelStreamer.Current != null && LevelStreamer.Current.EnsureLoaded(targetLevel.id))
+            {
+                // The target level is built on demand, the first time something leads into it
+                targetWarp = FindTargetWarp();
+            }
+
             if (targetWarp == null)
             {
                 Debug.LogError("Target warp wasn't found");

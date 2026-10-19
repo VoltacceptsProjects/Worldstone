@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using Diablerie.Engine.Datasheets;
 using Diablerie.Engine.Entities;
@@ -164,6 +164,7 @@ namespace Diablerie.Engine
             OnHandsItemChanged(player.HandsItem);
             player.HandsItemChanged += OnHandsItemChanged;
             player.IdentifyScrollChanged += OnIdentifyScrollChanged;
+            QuestPanel.BindMinipanelButton();
         }
 
         public bool Take(Item item)
@@ -236,7 +237,7 @@ namespace Diablerie.Engine
             float cameraShift = 0;
             if (InventoryPanel.instance.visible)
                 cameraShift += 0.5f;
-            if (CharstatPanel.instance.visible || WaypointPanel.IsVisible || StashPanel.IsVisible || GamblePanel.IsVisible)
+            if (CharstatPanel.instance.visible || QuestPanel.IsVisible || WaypointPanel.IsVisible || StashPanel.IsVisible || GamblePanel.IsVisible)
                 cameraShift -= 0.5f;
             cameraController.horizontalShift = cameraShift;
         }
@@ -262,6 +263,13 @@ namespace Diablerie.Engine
                 if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space))
                 {
                     NpcDialog.Hide();
+                }
+            }
+            else if (QuestPanel.IsVisible && !InventoryPanel.instance.visible)
+            {
+                if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space))
+                {
+                    QuestPanel.Hide();
                 }
             }
             else if (WaypointPanel.IsVisible)
@@ -314,7 +322,13 @@ namespace Diablerie.Engine
 
                 if (Input.GetKeyDown(KeyCode.C))
                 {
+                    QuestPanel.Hide();
                     CharstatPanel.instance.visible ^= true;
+                }
+
+                if (Input.GetKeyDown(KeyCode.Q))
+                {
+                    QuestPanel.Toggle();
                 }
 
                 if (Input.GetKeyDown(KeyCode.R))

@@ -110,6 +110,7 @@ namespace Diablerie.Engine.IO.D2Formats
             public int subIndex;
             public int rarity;
             public BlockFlags[] flags;
+            public bool blocksMovement;
             public int blockHeaderPointer;
             public int blockDatasLength;
             public int blockCount;
@@ -119,7 +120,7 @@ namespace Diablerie.Engine.IO.D2Formats
             public int textureX;
             public int textureY;
             public int index;
-        
+
             public void Read(BinaryReader reader)
             {
                 direction = reader.ReadInt32();
@@ -128,19 +129,27 @@ namespace Diablerie.Engine.IO.D2Formats
                 animated = reader.ReadByte();
                 height = reader.ReadInt32();
                 width = reader.ReadInt32();
-                reader.ReadBytes(4); // zeros
+                reader.ReadInt32();
                 orientation = reader.ReadInt32();
                 mainIndex = reader.ReadInt32();
                 subIndex = reader.ReadInt32();
                 rarity = reader.ReadInt32();
-                reader.ReadBytes(4); // unknown
-                byte[] flags = reader.ReadBytes(25); // Left to Right, and Bottom to Up
-                this.flags = flags.Cast<BlockFlags>().ToArray();
-                reader.ReadBytes(7); // unused
+                reader.ReadInt32();
+                flags = new BlockFlags[25];
+                const BlockFlags blockMask = BlockFlags.Walk | BlockFlags.PlayerWalk;
+                blocksMovement = false;
+                for (int i = 0; i < 25; ++i)
+                {
+                    var flag = (BlockFlags)reader.ReadByte();
+                    flags[i] = flag;
+                    if ((flag & blockMask) != 0)
+                        blocksMovement = true;
+                }
+                reader.BaseStream.Seek(7, SeekOrigin.Current);
                 blockHeaderPointer = reader.ReadInt32();
                 blockDatasLength = reader.ReadInt32();
                 blockCount = reader.ReadInt32();
-                reader.ReadBytes(12); // zeros
+                reader.BaseStream.Seek(12, SeekOrigin.Current);
                 index = Index(mainIndex, subIndex, orientation);
             }
 
@@ -151,55 +160,145 @@ namespace Diablerie.Engine.IO.D2Formats
         }
 
         static Dictionary<string, DT1> cache = new Dictionary<string, DT1>();
+        static Dictionary<string, Job> inflight = new Dictionary<string, Job>();
 
         public static void ResetCache()
         {
             cache.Clear();
+            inflight.Clear();
         }
 
-        static void ReadTiles(DT1 dt1, Stream stream, BinaryReader reader, byte[] bytes, Color32[] palette)
+        public static bool IsCached(string filename)
         {
-            int tileCount = reader.ReadInt32();
-            reader.ReadInt32(); //  Pointer in file to Tile Headers (= 276) 
-            dt1.tiles = new Tile[tileCount];
+            return cache.ContainsKey(filename.ToLower());
+        }
 
-            for (int i = 0; i < tileCount; ++i)
+        public class Job
+        {
+            public readonly DT1 dt1 = new DT1();
+
+            readonly string filename;
+            readonly string lowerFilename;
+            readonly Color32[] palette;
+            readonly bool mpq;
+
+            bool begun;
+            bool done;
+            byte[] bytes;
+            MemoryStream stream;
+            BinaryReader reader;
+            int tileCount;
+            int next;
+            int textureSize;
+            TexturePacker packer;
+            Texture2D texture;
+            Material material;
+            byte[] pixels;
+            Texture paletteTexture;
+
+            public bool Done => done;
+
+            internal Job(string filename, Color32[] palette, bool mpq)
             {
-                dt1.tiles[i] = new Tile();
-                dt1.tiles[i].Read(reader);
+                this.filename = filename;
+                this.lowerFilename = filename.ToLower();
+                this.palette = palette;
+                this.mpq = mpq;
+                dt1.filename = filename;
+                inflight[lowerFilename] = this;
             }
 
-            Texture paletteTexture = Palette.CreateTexture(palette);
-
-            int textureSize = CalcTextureSize(dt1.tiles);
-            var packer = new TexturePacker(textureSize, textureSize);
-            Material material = null;
-            Texture2D texture = null;
-            byte[] pixels = null;
-
-            for (int i = 0; i < tileCount; ++i)
+            public bool Step(double budgetMs)
             {
-                var tile = dt1.tiles[i];
+                if (done)
+                    return true;
 
-                if (tile.width == 0 || tile.height == 0)
+                UnityEngine.Profiling.Profiler.BeginSample("DT1.Job.Step");
+                try
                 {
-                    Debug.Log(string.Format("Zero size {0}x{1}", tile.width, tile.height));
-                    continue;
+                    var clock = System.Diagnostics.Stopwatch.StartNew();
+                    if (!begun)
+                    {
+                        begun = true;
+                        bool ok;
+                        try
+                        {
+                            ok = Begin();
+                        }
+                        catch
+                        {
+                            Abort();
+                            throw;
+                        }
+
+                        if (!ok)
+                        {
+                            Abort();
+                            return true;
+                        }
+                    }
+
+                    while (next < tileCount)
+                    {
+                        ProcessTile(dt1.tiles[next]);
+                        ++next;
+                        if ((next & 3) == 0 && clock.Elapsed.TotalMilliseconds >= budgetMs)
+                            return false;
+                    }
+
+                    Finish();
+                    return true;
                 }
+                finally
+                {
+                    UnityEngine.Profiling.Profiler.EndSample();
+                }
+            }
+
+            bool Begin()
+            {
+                bytes = mpq ? Mpq.ReadAllBytes(filename) : File.ReadAllBytes(filename);
+                stream = new MemoryStream(bytes);
+                reader = new BinaryReader(stream);
+
+                int version1 = reader.ReadInt32();
+                int version2 = reader.ReadInt32();
+                if (version1 != 7 || version2 != 6)
+                {
+                    Debug.Log(string.Format("Can't read dt1 file, bad version ({0}.{1})", version1, version2));
+                    dt1.tiles = new Tile[0];
+                    return false;
+                }
+
+                stream.Seek(260, SeekOrigin.Current);
+                tileCount = reader.ReadInt32();
+                reader.ReadInt32();
+                dt1.tiles = new Tile[tileCount];
+                for (int i = 0; i < tileCount; ++i)
+                {
+                    dt1.tiles[i] = new Tile();
+                    dt1.tiles[i].Read(reader);
+                }
+
+                paletteTexture = Palette.GetSharedTexture(palette);
+                textureSize = CalcTextureSize(dt1.tiles);
+                packer = new TexturePacker(textureSize, textureSize);
+                return true;
+            }
+
+            void ProcessTile(Tile tile)
+            {
+                if (tile.width == 0 || tile.height == 0)
+                    return;
 
                 var pack = packer.put(tile.width, -tile.height);
                 if (pack.newTexture)
                 {
-                    if (texture != null)
-                    {
-                        texture.LoadRawTextureData(pixels);
-                        texture.Apply(false);
-                    }
-
+                    UploadTexture();
                     texture = new Texture2D(textureSize, textureSize, TextureFormat.Alpha8, false);
                     texture.filterMode = FilterMode.Point;
                     dt1.textures.Add(texture);
-                    material = new Material(Materials.Indexed);  // TODO use single material and property blocks
+                    material = new Material(Materials.Indexed);
                     material.mainTexture = texture;
                     material.SetTexture("_Palette", paletteTexture);
                     pixels = new byte[textureSize * textureSize];
@@ -212,7 +311,6 @@ namespace Diablerie.Engine.IO.D2Formats
 
                 if ((tile.orientation == 0 || tile.orientation == 15) && tile.height != 0)
                 {
-                    // floor or roof
                     tile.height = -79;
                 }
                 else if (tile.orientation > 0 && tile.orientation < 15)
@@ -229,12 +327,12 @@ namespace Diablerie.Engine.IO.D2Formats
                 {
                     int x = reader.ReadInt16();
                     int y = reader.ReadInt16();
-                    reader.ReadBytes(2); // zeros
-                    reader.ReadByte(); // gridX
-                    reader.ReadByte(); // gridY
+                    reader.ReadInt16();
+                    reader.ReadByte();
+                    reader.ReadByte();
                     short format = reader.ReadInt16();
                     int length = reader.ReadInt32();
-                    reader.ReadBytes(2); // zeros
+                    reader.ReadInt16();
                     int fileOffset = reader.ReadInt32();
                     int blockDataPosition = tile.blockHeaderPointer + fileOffset;
 
@@ -249,53 +347,64 @@ namespace Diablerie.Engine.IO.D2Formats
                 }
             }
 
-            if (texture != null)
+            void UploadTexture()
             {
+                if (texture == null || pixels == null)
+                    return;
                 texture.LoadRawTextureData(pixels);
-                texture.Apply(false);
+                texture.Apply(false, true);
             }
+
+            void Finish()
+            {
+                UploadTexture();
+                cache[lowerFilename] = dt1;
+                inflight.Remove(lowerFilename);
+                Release();
+                done = true;
+            }
+
+            void Abort()
+            {
+                inflight.Remove(lowerFilename);
+                Release();
+                done = true;
+            }
+
+            void Release()
+            {
+                if (reader != null)
+                    reader.Close();
+                if (stream != null)
+                    stream.Dispose();
+                reader = null;
+                stream = null;
+                bytes = null;
+                pixels = null;
+                texture = null;
+                material = null;
+            }
+        }
+
+        public static Job BeginLoad(string filename, Color32[] palette, bool mpq = true)
+        {
+            string lowerFilename = filename.ToLower();
+            if (cache.ContainsKey(lowerFilename))
+                return null;
+            if (inflight.TryGetValue(lowerFilename, out var running))
+                return running;
+            return new Job(filename, palette, mpq);
         }
 
         public static DT1 Load(string filename, Color32[] palette, bool mpq = true)
         {
             string lowerFilename = filename.ToLower();
-            if(cache.ContainsKey(lowerFilename))
-            {
-                return cache[lowerFilename];
-            }
+            if (cache.TryGetValue(lowerFilename, out var cached))
+                return cached;
 
-            UnityEngine.Profiling.Profiler.BeginSample("DT1.Load");
-            try
-            {
-                var sw = System.Diagnostics.Stopwatch.StartNew();
-                var bytes = mpq ? Mpq.ReadAllBytes(filename) : File.ReadAllBytes(filename);
-                var dt1 = new DT1();
-                dt1.filename = filename;
-
-                using (var stream = new MemoryStream(bytes))
-                using (var reader = new BinaryReader(stream))
-                {
-                    int version1 = reader.ReadInt32();
-                    int version2 = reader.ReadInt32();
-                    if (version1 != 7 || version2 != 6)
-                    {
-                        Debug.Log(string.Format("Can't read dt1 file, bad version ({0}.{1})", version1, version2));
-                        return dt1;
-                    }
-
-                    stream.Seek(260, SeekOrigin.Current);
-                    ReadTiles(dt1, stream, reader, bytes, palette);
-                }
-
-                cache[lowerFilename] = dt1;
-                Debug.Log(dt1.filename + ", tiles " + dt1.tiles.Length + ", " + dt1.textures.Count + " textures, " +
-                          sw.ElapsedMilliseconds + " ms");
-                return dt1;
-            }
-            finally
-            {
-                UnityEngine.Profiling.Profiler.EndSample();
-            }
+            var job = BeginLoad(filename, palette, mpq);
+            job.Step(double.MaxValue);
+            return job.dt1;
         }
 
         static void drawBlockNormal(byte[] texturePixels, int textureSize, int x0, int y0, byte[] data, int ptr, int length)
