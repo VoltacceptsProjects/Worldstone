@@ -1,7 +1,8 @@
-﻿using Diablerie.Engine;
+using Diablerie.Engine;
 using Diablerie.Engine.Datasheets;
 using Diablerie.Engine.Entities;
 using Diablerie.Engine.UI;
+using Diablerie.Game.UI;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -60,6 +61,7 @@ namespace Diablerie.Game.UI.Inventory
 
         public void Update()
         {
+            PanelFrame.Ensure();
             goldText.text = _player.inventory.gold.ToString();
         }
 

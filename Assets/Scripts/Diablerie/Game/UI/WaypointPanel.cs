@@ -34,7 +34,7 @@ namespace Diablerie.Game.UI
         private const float PanelWidth = 320;
         private const float PanelHeight = 432;
         private const float PanelLeftEdge = -320;
-        private const float PanelVerticalShift = 0;
+        private const float PanelVerticalShift = PanelFrame.UiShift;
         private const float CloseDistance = 10;
 
         // Layout inside of the panel, in pixels measured from the top left corner
@@ -118,6 +118,7 @@ namespace Diablerie.Game.UI
 
             _size = BuildBackground(background);
             _root.sizeDelta = _size;
+            PanelFrame.StoneBase(_root);
 
             BuildTabs();
             BuildTitle();

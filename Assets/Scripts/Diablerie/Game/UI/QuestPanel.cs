@@ -27,11 +27,17 @@ namespace Diablerie.Game.UI
         // three to a row, with the name of the selected quest and its objective below
         private const string IconPath = @"data\global\ui\menu\a1q";
         private const string SocketPath = @"data\global\ui\menu\questsockets";
-        private const float Margin = 14;
-        private const float GridTop = 34;
-        private const float CellHeight = 60;
-        private const float CellGap = 4;
+        private const float Margin = 13;
+        private const float GridTop = 24;
+        private const float CellHeight = 98;
+        private const float CellGap = 6;
         private const float NameBarHeight = 20;
+        private const float TabWidth = 35;
+        private const float TabHeight = 22;
+        private const float NameBarTop = 236;
+        private const float NameBarInset = 42;
+        private const float TextMargin = 5;
+        private const float TextTop = 252;
         private const float RefreshInterval = 0.4f;
 
         private static readonly Color Title = new Color(0.85f, 0.85f, 0.85f);
@@ -122,10 +128,11 @@ namespace Diablerie.Game.UI
             PanelLayer.Place(_root);
             _root.anchorMin = _root.anchorMax = new Vector2(0.5f, 0.5f);
             _root.pivot = new Vector2(0, 0.5f);
-            _root.anchoredPosition = new Vector2(PanelLeftEdge, 0);
+            _root.anchoredPosition = new Vector2(PanelLeftEdge, PanelFrame.UiShift);
 
             _size = BuildBackground(background);
             _root.sizeDelta = _size;
+            PanelFrame.StoneBase(_root);
 
             var sockets = PanelSheet.Load(SocketPath);
             if (sockets != null)
@@ -134,29 +141,33 @@ namespace Diablerie.Game.UI
                 _socketSelected = sockets.sprites.Length > 1 ? sockets.sprites[1] : sockets.sprites[0];
             }
 
+            Debug.Log("QuestPanel layout v2 size " + _size + " sockets " + (sockets == null ? "missing" : sockets.Describe()));
+
+            BuildTabs();
+
             for (int i = 0; i < Act1Dialog.Quests.Length; ++i)
                 BuildCell(i);
 
-            float gridBottom = GridTop + 2 * CellHeight + CellGap;
-            float nameTop = gridBottom + 6;
-            float textTop = nameTop + NameBarHeight + 2;
-            float textHeight = Mathf.Max(40, _size.y - textTop - 10);
-            float boxWidth = _size.x - 2 * Margin;
+            float nameTop = NameBarTop;
+            float textTop = TextTop;
+            float textHeight = Mathf.Max(40, _size.y - textTop - 49);
+            float boxWidth = _size.x - 2 * TextMargin;
 
-            var nameBar = MenuWidgets.Box("Name Bar", _root, new Color(0, 0, 0, 0.9f));
-            nameBar.raycastTarget = false;
-            Place(nameBar.rectTransform, new Vector2(Margin, -nameTop), new Vector2(boxWidth, NameBarHeight), false);
             _name = MenuWidgets.Label("Name", _root, "", Fonts.GetFont16(), Title, TextAnchor.MiddleCenter);
-            Place(_name.rectTransform, new Vector2(Margin, -nameTop), new Vector2(boxWidth, NameBarHeight), false);
+            Place(_name.rectTransform, new Vector2(NameBarInset, -nameTop), new Vector2(_size.x - 2 * NameBarInset, NameBarHeight), false);
 
-            var textBox = MenuWidgets.Box("Text Box", _root, new Color(0, 0, 0, 0.9f));
+            var outline = MenuWidgets.Box("Text Outline", _root, new Color(0.62f, 0.52f, 0.30f, 1f));
+            outline.raycastTarget = false;
+            Place(outline.rectTransform, new Vector2(TextMargin - 1, -(textTop - 1)), new Vector2(boxWidth + 2, textHeight + 2), false);
+
+            var textBox = MenuWidgets.Box("Text Box", _root, new Color(0.09f, 0.09f, 0.09f, 1f));
             textBox.raycastTarget = false;
-            Place(textBox.rectTransform, new Vector2(Margin, -textTop), new Vector2(boxWidth, textHeight), false);
+            Place(textBox.rectTransform, new Vector2(TextMargin, -textTop), new Vector2(boxWidth, textHeight), false);
 
             _detail = MenuWidgets.Label("Detail", _root, "", Fonts.GetFont16(), Body, TextAnchor.UpperLeft);
             _detail.horizontalOverflow = HorizontalWrapMode.Wrap;
             _detail.verticalOverflow = VerticalWrapMode.Truncate;
-            Place(_detail.rectTransform, new Vector2(Margin + 6, -(textTop + 4)), new Vector2(boxWidth - 12, textHeight - 8), false);
+            Place(_detail.rectTransform, new Vector2(TextMargin + 8, -(textTop + 6)), new Vector2(boxWidth - 16, textHeight - 12), false);
 
             _root.gameObject.AddComponent<Watcher>().panel = this;
             _root.gameObject.SetActive(false);
@@ -191,6 +202,16 @@ namespace Diablerie.Game.UI
             return size;
         }
 
+        private void BuildTabs()
+        {
+            string[] numerals = { "I", "II", "III", "IV", "V" };
+            for (int i = 0; i < numerals.Length; ++i)
+            {
+                var label = MenuWidgets.Label("Tab " + numerals[i], _root, numerals[i], Fonts.GetFont16(), i == 0 ? Title : Dimmed, TextAnchor.MiddleCenter);
+                Place(label.rectTransform, new Vector2(TabWidth * i, -6), new Vector2(TabWidth, TabHeight), false);
+            }
+        }
+
         private void BuildCell(int index)
         {
             float cellWidth = (_size.x - 2 * Margin - 2 * CellGap) / 3;
@@ -198,18 +219,19 @@ namespace Diablerie.Game.UI
             float y = -(GridTop + (index / 3) * (CellHeight + CellGap));
             var cellSize = new Vector2(cellWidth, CellHeight);
 
+            var center = new Vector2(x + cellWidth / 2, y - CellHeight / 2);
+
             var socket = NewImage("Socket " + (index + 1), _root, _socketNormal);
-            socket.preserveAspect = true;
             socket.raycastTarget = true;
-            Place(socket.rectTransform, new Vector2(x, y), cellSize, false);
+            Place(socket.rectTransform, center, NativeSize(_socketNormal, cellSize), true);
             _sockets[index] = socket;
 
             var iconSheet = PanelSheet.Load(IconPath + Act1Dialog.Quests[index].number);
-            var icon = NewImage("Icon " + (index + 1), _root, iconSheet != null ? iconSheet.sprites[0] : null);
-            icon.preserveAspect = true;
+            var iconSprite = iconSheet != null ? iconSheet.sprites[0] : null;
+            var icon = NewImage("Icon " + (index + 1), _root, iconSprite);
             icon.raycastTarget = false;
             icon.enabled = icon.sprite != null;
-            Place(icon.rectTransform, new Vector2(x + cellWidth * 0.15f, y - CellHeight * 0.15f), new Vector2(cellWidth * 0.7f, CellHeight * 0.7f), false);
+            Place(icon.rectTransform, center, NativeSize(iconSprite, cellSize), true);
             _icons[index] = icon;
 
             // Completed quests get the "done" mark from the original art, when the sheet is available
@@ -380,6 +402,13 @@ namespace Diablerie.Game.UI
                 return;
             _nextRefresh = Time.unscaledTime + RefreshInterval;
             Refresh();
+        }
+
+        private static Vector2 NativeSize(Sprite sprite, Vector2 fallback)
+        {
+            if (sprite == null)
+                return fallback;
+            return new Vector2(sprite.rect.width, sprite.rect.height);
         }
 
         private static Image NewImage(string name, Transform parent, Sprite sprite)
