@@ -102,7 +102,19 @@ namespace Diablerie.Engine
 
         Vector3 CalcTargetPos()
         {
-            Vector3 targetPos = WorldState.instance.Player.transform.position;
+            // With two players the camera looks at the middle between them
+            var players = WorldState.instance.Players;
+            Vector3 sum = Vector3.zero;
+            int count = 0;
+            for (int i = 0; i < players.Count; ++i)
+            {
+                if (players[i].transform == null)
+                    continue;
+                sum += players[i].transform.position;
+                ++count;
+            }
+
+            Vector3 targetPos = count > 0 ? sum / count : WorldState.instance.Player.transform.position;
             targetPos.z = transform.position.z;
 
             targetPos.x += camera.orthographicSize * VirtualWidth / VirtualHeight * horizontalShift;

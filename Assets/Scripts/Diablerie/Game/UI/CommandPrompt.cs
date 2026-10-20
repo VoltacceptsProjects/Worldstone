@@ -156,6 +156,11 @@ namespace Diablerie.Game.UI
                     WorldBuilder.LoadAct(actNumber);
                 }
             }
+            else if (parts.Length >= 1 && parts[0] == "/coop")
+            {
+                // /coop toggles player 2, /coop <class> joins with that class
+                Diablerie.Game.Coop.CoopManager.HandleCommand(parts.Length > 1 ? parts[1] : null);
+            }
             else if (parts.Length == 1 && parts[0] == "/stats")
             {
                 // The totals of all item bonuses, to check what the worn items do

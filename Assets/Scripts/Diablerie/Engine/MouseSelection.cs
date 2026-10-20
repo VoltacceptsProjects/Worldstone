@@ -151,7 +151,7 @@ namespace Diablerie.Engine
                 if (!entity.selectable)
                     continue;
 
-                if (entity == WorldState.instance.Player.unit)
+                if (WorldState.instance.IsPlayerUnit(entity))
                     continue;
 
                 Bounds bounds = entity.bounds;

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Diablerie.Engine.Datasheets;
 using Diablerie.Engine.IO.D2Formats;
 using Diablerie.Engine.Utility;
+using Diablerie.Engine.World;
 using UnityEngine;
 
 namespace Diablerie.Engine.Entities
@@ -70,6 +71,8 @@ namespace Diablerie.Engine.Entities
         public int DirectionIndex => _directionIndex;
 
         public int AnimationFrame => _animationFrame;
+
+        public bool IsDead => _dying || _dead;
 
         #region Unity Lifecycle
 
@@ -195,6 +198,28 @@ namespace Diablerie.Engine.Entities
             Events.InvokeUnitDied(this, killer);
         }
 
+        // Brings a dead unit back to life, used for players in co-op. Monsters stay dead.
+        public void Revive(float healthFraction = 1f)
+        {
+            if (!_dying && !_dead)
+                return;
+
+            _dying = false;
+            _dead = false;
+            _resurrecting = false;
+            _usingSkill = false;
+            _moving = false;
+            _skillInfo = null;
+            _targetUnit = null;
+            _targetEntity = null;
+            _operatingWithEntity = null;
+            overrideMode = null;
+            health = Mathf.Clamp(Mathf.RoundToInt(maxHealth * healthFraction), 1, maxHealth);
+            // Kill() made the tile passable, the living unit blocks it again
+            CollisionMap.Move(iso.pos, iso.pos, size, gameObject);
+            UpdateMode();
+        }
+
         public void GetHit()
         {
             overrideMode = "GH";
@@ -270,7 +295,10 @@ namespace Diablerie.Engine.Entities
                         _targetEntity.Operate(this);
                     }
                     _targetEntity = null;
-                    PlayerController.instance.FlushInput();  // Very strange to see it here, remove
+                    // Flushing is about the mouse of the main player, the co-op guest must not trigger it
+                    var world = WorldState.instance;
+                    if (world == null || world.Player2 == null || world.Player2.unit != this)
+                        PlayerController.instance.FlushInput();  // Very strange to see it here, remove
                 }
                 else
                 {
@@ -449,7 +477,9 @@ namespace Diablerie.Engine.Entities
             {
                 _dying = false;
                 _dead = true;
-                CorpseReaper.Add(this);
+                // Players are never cleaned up, they stay in the world and can be revived
+                if (monStat != null)
+                    CorpseReaper.Add(this);
             }
             UpdateMode();
         }

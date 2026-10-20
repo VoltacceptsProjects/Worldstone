@@ -50,6 +50,56 @@ namespace Diablerie.Engine.World
 
         public HashSet<Popup> Popups => _popups;
 
-        public Player Player { get; set; }
+        private Player _player;
+        private Player _player2;
+        private readonly List<Player> _players = new List<Player>(2);
+
+        // The main player: mouse and keyboard, owns the UI, the quests and the save game
+        public Player Player
+        {
+            get => _player;
+            set { _player = value; RebuildPlayers(); }
+        }
+
+        // Couch co-op guest, null while playing alone
+        public Player Player2
+        {
+            get => _player2;
+            set { _player2 = value; RebuildPlayers(); }
+        }
+
+        // Everyone who is playing, the main player first. Read only, do not modify.
+        public List<Player> Players => _players;
+
+        public bool IsPlayerUnit(Entity entity)
+        {
+            for (int i = 0; i < _players.Count; ++i)
+            {
+                if (_players[i].unit == entity)
+                    return true;
+            }
+            return false;
+        }
+
+        public Player PlayerOf(Unit unit)
+        {
+            if (unit == null)
+                return null;
+            for (int i = 0; i < _players.Count; ++i)
+            {
+                if (_players[i].unit == unit)
+                    return _players[i];
+            }
+            return null;
+        }
+
+        private void RebuildPlayers()
+        {
+            _players.Clear();
+            if (_player != null)
+                _players.Add(_player);
+            if (_player2 != null)
+                _players.Add(_player2);
+        }
     }
 }

@@ -88,11 +88,18 @@ namespace Diablerie.Engine
         {
         }
 
-        private Player(string className, string characterName, Vector2i pos, CharacterSave save)
+        // The couch co-op guest: a fresh character that is not saved, has no stash and shares the
+        // audio listener of the main player
+        public static Player CreateGuest(string className, string characterName, Vector2i pos)
+        {
+            return new Player(className, characterName, pos, null, guest: true);
+        }
+
+        private Player(string className, string characterName, Vector2i pos, CharacterSave save, bool guest = false)
         {
             name = characterName;
             charStatInfo = CharStatsInfo.Find(className);
-            gameObject = new GameObject("Player");
+            gameObject = new GameObject(guest ? "Player 2" : "Player");
             transform = gameObject.transform;
             transform.position = Iso.MapTileToWorld(pos);
             gameObject.tag = "Player";
@@ -115,15 +122,19 @@ namespace Diablerie.Engine
             inventory = Inventory.Create(gameObject, 10, 4);
             var stashLayout = StashLayout.Get();
             stash = Inventory.Create(gameObject, stashLayout.columns, stashLayout.rows);
-            SaveManager.RestoreSharedStash(this, save);
+            if (!guest)
+                SaveManager.RestoreSharedStash(this, save);
             var body = gameObject.AddComponent<Rigidbody2D>();
             body.isKinematic = true;
             var collider = gameObject.AddComponent<CircleCollider2D>();
             collider.radius = Iso.tileSizeY;
-            var listenerObject = new GameObject("Audio Listener");
-            listenerObject.AddComponent<AudioListener>();
-            listenerObject.transform.SetParent(gameObject.transform, true);
-            listenerObject.transform.localPosition = new Vector3(0, 0, -1);
+            if (!guest)
+            {
+                var listenerObject = new GameObject("Audio Listener");
+                listenerObject.AddComponent<AudioListener>();
+                listenerObject.transform.SetParent(gameObject.transform, true);
+                listenerObject.transform.localPosition = new Vector3(0, 0, -1);
+            }
             charStat = gameObject.AddComponent<CharStat>();
             charStat.unit = unit;
             stats = PlayerStats.Create(this);

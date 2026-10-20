@@ -55,15 +55,23 @@ namespace Diablerie.Engine.World
             }
         }
 
+        // With two players the roof stays open until both have left
+        private int playersInside;
+
         void OnTriggerEnter2D(Collider2D other)
         {
-            if (other.gameObject.tag == "Player")
-                Reveal();
+            if (other.gameObject.tag != "Player")
+                return;
+            ++playersInside;
+            Reveal();
         }
 
         void OnTriggerExit2D(Collider2D other)
         {
-            if (other.gameObject.tag == "Player")
+            if (other.gameObject.tag != "Player")
+                return;
+            playersInside = Mathf.Max(0, playersInside - 1);
+            if (playersInside == 0)
                 Hide();
         }
 

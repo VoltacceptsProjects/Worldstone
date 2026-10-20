@@ -22,6 +22,13 @@ namespace Diablerie.Engine
             if (collision.gameObject.tag != "Player")
                 return;
 
+            // The level title and music follow the main player, the co-op guest walks along
+            var mainPlayer = Diablerie.Engine.World.WorldState.instance != null
+                ? Diablerie.Engine.World.WorldState.instance.Player
+                : null;
+            if (mainPlayer != null && collision.gameObject != mainPlayer.gameObject)
+                return;
+
             if (_current != null)
                 LevelEntryTitle.Show("Entering " + info.levelName);
 

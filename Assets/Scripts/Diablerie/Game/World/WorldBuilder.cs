@@ -37,6 +37,8 @@ namespace Diablerie.Game.World
                 gameObject.AddComponent<UnitActivity>();
             if (GetComponent<Act1QuestSetup>() == null)
                 gameObject.AddComponent<Act1QuestSetup>();
+            if (GetComponent<Diablerie.Game.Coop.CoopManager>() == null)
+                gameObject.AddComponent<Diablerie.Game.Coop.CoopManager>();
         }
 
         private void Start()

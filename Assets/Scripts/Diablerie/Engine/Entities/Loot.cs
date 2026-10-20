@@ -1,5 +1,6 @@
 ﻿using Diablerie.Engine.Datasheets;
 using Diablerie.Engine.IO.D2Formats;
+using Diablerie.Engine.World;
 using UnityEngine;
 
 namespace Diablerie.Engine.Entities
@@ -99,7 +100,13 @@ namespace Diablerie.Engine.Entities
             if (item == null)
                 Destroy(gameObject);
 
-            if (PlayerController.instance.Take(item))
+            // The co-op guest has no inventory screen, the item goes straight into the bag or onto the body
+            var picker = WorldState.instance.PlayerOf(unit);
+            bool took = picker != null && picker != WorldState.instance.Player
+                ? TakeForGuest(picker)
+                : PlayerController.instance.Take(item);
+
+            if (took)
             {
                 Destroy(gameObject);
             }
@@ -107,6 +114,16 @@ namespace Diablerie.Engine.Entities
             {
                 Flip();
             }
+        }
+
+        private bool TakeForGuest(Player guest)
+        {
+            bool took = guest.Take(item);
+            if (took)
+                AudioManager.instance.Play(SoundInfo.itemPickup);
+            else
+                AudioManager.instance.Play(guest.charStatInfo.classNameLower + "_cantcarry_1");
+            return took;
         }
     }
 }

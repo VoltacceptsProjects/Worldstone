@@ -18,11 +18,19 @@ namespace Diablerie.Engine
 
         void UnitDeath(Unit target, Unit killer)
         {
-            var player = WorldState.instance.Player;
-            
-            if (target.monStat != null && killer == player.unit)
+            var world = WorldState.instance;
+
+            // A kill by any player pays everybody who is still standing
+            if (target.monStat == null || !world.IsPlayerUnit(killer))
+                return;
+
+            uint exp = target.monStat.stats[0].exp;
+            var players = world.Players;
+            for (int i = 0; i < players.Count; ++i)
             {
-                player.charStat.AddExp(target.monStat.stats[0].exp);
+                var player = players[i];
+                if (player.unit == killer || !player.unit.IsDead)
+                    player.charStat.AddExp(exp);
             }
         }
     }
