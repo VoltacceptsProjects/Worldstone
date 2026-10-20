@@ -257,6 +257,10 @@ namespace Diablerie.Engine.Datasheets
                     ranged = weapon.info.type.shoots != null;
                 }
 
+                var playerStats = self.GetComponent<PlayerStats>();
+                if (playerStats != null)
+                    damage = playerStats.ModifyWeaponDamage(damage);
+
                 if (ranged)
                 {
                     var missile = Missile.Create("arrow", target, self);
@@ -266,6 +270,8 @@ namespace Diablerie.Engine.Datasheets
                 {
                     AudioManager.instance.Play(hitClass.hitSound, targetUnit.transform.position);
                     targetUnit.Hit(damage, self);
+                    if (playerStats != null)
+                        playerStats.OnMeleeHit(damage);
                 }
             }
             else if (srvDoFunc == 17)

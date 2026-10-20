@@ -7,6 +7,8 @@ namespace Diablerie.Engine
     public class CharStat : MonoBehaviour
     {
         public Unit unit;
+        // Raised after the level went up, before life and mana are refilled
+        public event System.Action LeveledUp;
         public int level = 1;
         public uint experience = 0;
 
@@ -39,6 +41,8 @@ namespace Diablerie.Engine
         {
             AudioManager.instance.Play("cursor_level_up");
             level += 1;
+            if (LeveledUp != null)
+                LeveledUp();
             unit.health = unit.maxHealth;
             unit.mana = unit.maxMana;
         }

@@ -299,6 +299,9 @@ namespace Diablerie.Engine.SaveGame
                     player.waypoints.Add(index);
             }
 
+            // Items and level are back, so the maximums include their bonuses before life is clamped
+            player.stats.Recalculate();
+
             player.unit.health = Mathf.Clamp(save.health, 1, player.unit.maxHealth);
             player.unit.mana = Mathf.Clamp(save.mana, 0, player.unit.maxMana);
 

@@ -18,6 +18,7 @@ namespace Diablerie.Engine
         public Inventory inventory;
         public Inventory stash;
         public CharStat charStat;
+        public PlayerStats stats;
         public CharStatsInfo charStatInfo;
         public readonly HashSet<int> waypoints = new HashSet<int>();
         
@@ -125,6 +126,7 @@ namespace Diablerie.Engine
             listenerObject.transform.localPosition = new Vector3(0, 0, -1);
             charStat = gameObject.AddComponent<CharStat>();
             charStat.unit = unit;
+            stats = PlayerStats.Create(this);
             gameObject.AddComponent<UnitRenderer>();
 
             if (save != null)
@@ -165,7 +167,7 @@ namespace Diablerie.Engine
         {
             if (item.info.code == "gld")
             {
-                inventory.gold += item.quantity;
+                inventory.gold += stats != null ? stats.GoldWithBonus(item.quantity) : item.quantity;
                 return true;
             }
 

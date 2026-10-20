@@ -156,6 +156,12 @@ namespace Diablerie.Game.UI
                     WorldBuilder.LoadAct(actNumber);
                 }
             }
+            else if (parts.Length == 1 && parts[0] == "/stats")
+            {
+                // The totals of all item bonuses, to check what the worn items do
+                var stats = WorldState.instance.Player.stats;
+                Debug.Log(stats.Describe());
+            }
             else if (parts.Length == 2 && parts[0] == "/addstate")
             {
                 string stateCode = parts[1];
