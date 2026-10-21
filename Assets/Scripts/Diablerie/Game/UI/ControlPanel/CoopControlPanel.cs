@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using Diablerie.Engine.World;
+using Diablerie.Game.Coop;
 using UnityEngine;
 using UnityEngine.UI;
+using SkillBar = Diablerie.Game.UI.SkillPanel.SkillPanel;
 
 namespace Diablerie.Game.UI.ControlPanel
 {
@@ -9,7 +11,10 @@ namespace Diablerie.Game.UI.ControlPanel
     // on the sides of the view:
     //   player 1: the panel turned 90 degrees clockwise, on the left side
     //   player 2: a clone of the panel turned 90 degrees counterclockwise, on the right side
-    // When player 2 leaves, the original panel is put back at the bottom. Added to the game scene by CoopManager.
+    // The skill bar (the six hot skills) belongs to the panel: player 1's bar is moved into his panel and turned
+    // with it, player 2 gets a copy that shows the four skills of his gamepad buttons.
+    // When player 2 leaves, the original panel and skill bar are put back at the bottom. Added to the game scene
+    // by CoopManager.
     public class CoopControlPanel : MonoBehaviour
     {
         private class Saved
@@ -32,6 +37,9 @@ namespace Diablerie.Game.UI.ControlPanel
             public int origin;
         }
 
+        private SkillBar _skillBar;
+        private Transform _skillBarParent;
+        private int _skillBarSibling;
         private readonly List<SavedFill> _fills = new List<SavedFill>();
         private bool _coop;
 
@@ -71,6 +79,11 @@ namespace Diablerie.Game.UI.ControlPanel
             if (_panel == null)
                 return false;   // not there yet, try again next frame
 
+            var world = WorldState.instance;
+            var guestInput = world.Player2 != null ? world.Player2.gameObject.GetComponent<CoopPlayerInput>() : null;
+            if (guestInput == null)
+                return false;   // player 2 is not set up yet, try again next frame
+
             // The copy for player 2 is made from the untouched panel
             var copy = Instantiate(_panel.gameObject, _panel.parent, false);
             copy.name = "ControlPanel (Player 2)";
@@ -94,13 +107,51 @@ namespace Diablerie.Game.UI.ControlPanel
             _original = Save(_panel);
             _guestPanel = copy;
 
+            // The skill bar: a copy for player 2, the original moves into the panel of player 1. Both go into
+            // the panels before they are turned, so they are turned with them.
+            _skillBar = SkillBar.instance;
+            if (_skillBar != null)
+            {
+                var barCopy = Instantiate(_skillBar.gameObject, guest, false);
+                barCopy.name = "SkillPanel (Player 2)";
+                SkillBar.instance = _skillBar;   // the Awake of the copy has taken the instance over, give it back
+                FillGuestSkillBar(barCopy, guestInput);
+
+                _skillBarParent = _skillBar.transform.parent;
+                _skillBarSibling = _skillBar.transform.GetSiblingIndex();
+                _skillBar.transform.SetParent(_panel, false);   // anchors stay: the panel is as big as the canvas
+            }
+
             Turn(_panel, -90f, false, true);   // clockwise, left side
             Turn(guest, 90f, true, false);     // counterclockwise, right side
             return true;
         }
 
+        // Player 2 has no mouse: the copy only shows his four skills with the buttons that cast them
+        private static void FillGuestSkillBar(GameObject barCopy, CoopPlayerInput input)
+        {
+            string[] buttons = { "A", "X", "B", "Y", "RB", "RT" };
+            var bar = barCopy.GetComponent<SkillBar>();
+            for (int i = 0; i < bar.hotSkills.Length; ++i)
+            {
+                bar.SetHotSkill(i, input.GuestSkill(i));
+                if (i < buttons.Length)
+                    bar.SetHotKey(i, buttons[i]);
+            }
+            foreach (var button in barCopy.GetComponentsInChildren<Button>(true))
+                button.interactable = false;
+        }
+
         private void Leave()
         {
+            if (_skillBar != null && _skillBarParent != null)
+            {
+                _skillBar.transform.SetParent(_skillBarParent, false);
+                _skillBar.transform.SetSiblingIndex(_skillBarSibling);
+            }
+            _skillBar = null;
+            _skillBarParent = null;
+
             if (_guestPanel != null)
                 Destroy(_guestPanel);
             _guestPanel = null;

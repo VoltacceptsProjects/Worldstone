@@ -99,6 +99,12 @@ namespace Diablerie.Game.Coop
                 _skills[0] = SkillInfo.Attack;
         }
 
+        // The skill on a face button of the guest (A, X, B, Y, RB, RT), for his skill bar. Null for player 1.
+        public SkillInfo GuestSkill(int slot)
+        {
+            return !_main && slot >= 0 && slot < _skills.Length ? _skills[slot] : null;
+        }
+
         private void Update()
         {
             if (_unit == null || _player == null)
