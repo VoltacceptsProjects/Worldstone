@@ -1,5 +1,4 @@
 ﻿using Diablerie.Engine.UI;
-using Diablerie.Engine.World;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -13,14 +12,18 @@ namespace Diablerie.Game.UI.ControlPanel
         [SerializeField]
         private Tooltip tooltip;
 
+        // 0: player 1, 1: player 2 (set on the co-op copy of the panel)
+        public int playerIndex;
+
         void Update()
         {
-            if (WorldState.instance.Player == null)
+            var player = PanelPlayer.Get(playerIndex);
+            if (player == null)
                 return;
-            int level = WorldState.instance.Player.charStat.level;
-            uint currExp = WorldState.instance.Player.charStat.experience;
-            uint currLevelExp = WorldState.instance.Player.charStat.currentLevelExp;
-            uint nextLevelExp = WorldState.instance.Player.charStat.nextLevelExp;
+            int level = player.charStat.level;
+            uint currExp = player.charStat.experience;
+            uint currLevelExp = player.charStat.currentLevelExp;
+            uint nextLevelExp = player.charStat.nextLevelExp;
             filler.fillAmount = (currExp - currLevelExp) / (float)(nextLevelExp - currLevelExp);
             tooltip.text = "Level " + level + "\nExperience: " + (currExp - currLevelExp) + " / " + (nextLevelExp - currLevelExp);
         }

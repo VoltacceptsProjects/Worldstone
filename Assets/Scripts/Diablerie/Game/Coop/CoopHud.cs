@@ -4,15 +4,13 @@ using UnityEngine;
 
 namespace Diablerie.Game.Coop
 {
-    // Everything co-op that is drawn on top of the game: a small life bar and name over both players, the
-    // life and mana of player 2 in the corner (the bulbs of the control panel belong to player 1),
-    // the countdown for a fallen player and the invitation to join.
+    // Everything co-op that is drawn on top of the game: a small life bar and name over both players,
+    // the countdown for a fallen player and the invitation to join. The life and mana of player 2 are
+    // shown by his own control panel on the right side of the screen (CoopControlPanel).
     public class CoopHud : MonoBehaviour
     {
         private static readonly Color Player1Color = new Color(1f, 0.82f, 0.3f);
         private static readonly Color Player2Color = new Color(0.35f, 0.8f, 1f);
-        private static readonly Color Life = new Color(0.8f, 0.1f, 0.1f);
-        private static readonly Color Mana = new Color(0.15f, 0.3f, 0.9f);
         private static readonly Color Backdrop = new Color(0f, 0f, 0f, 0.65f);
 
         private GUIStyle _label;
@@ -46,7 +44,6 @@ namespace Diablerie.Game.Coop
 
             DrawOverhead(world.Player, "P1", Player1Color, s);
             DrawOverhead(world.Player2, "P2", Player2Color, s);
-            DrawPlayer2Panel(world.Player2, s);
             DrawReviveMessages(world, s);
         }
 
@@ -78,30 +75,6 @@ namespace Diablerie.Game.Coop
             FillRect(bar, Backdrop);
             FillRect(new Rect(bar.x, bar.y, bar.width * LifeFraction(player), bar.height), color);
             DrawLabel(new Rect(bar.x - width / 2f, bar.y - 16f * s, width * 2f, 16f * s), tag, color);
-        }
-
-        private void DrawPlayer2Panel(Player player, float s)
-        {
-            if (player.unit == null)
-                return;
-
-            var origin = ViewOrigin(s);
-            float width = 150f * s;
-            float x = origin.x + (CameraController.VirtualWidth - 158f) * s;
-            float y = origin.y + 8f * s;
-
-            FillRect(new Rect(x - 4f * s, y - 2f * s, width + 8f * s, 50f * s), Backdrop);
-            DrawLabel(new Rect(x, y, width, 16f * s),
-                "P2  " + player.charStatInfo.className + "  Lv " + player.charStat.level, Player2Color);
-
-            var lifeBar = new Rect(x, y + 20f * s, width, 9f * s);
-            FillRect(lifeBar, Backdrop);
-            FillRect(new Rect(lifeBar.x, lifeBar.y, lifeBar.width * LifeFraction(player), lifeBar.height), Life);
-
-            var manaBar = new Rect(x, y + 33f * s, width, 9f * s);
-            FillRect(manaBar, Backdrop);
-            float mana = Mathf.Clamp01((float) player.unit.mana / Mathf.Max(1, player.unit.maxMana));
-            FillRect(new Rect(manaBar.x, manaBar.y, manaBar.width * mana, manaBar.height), Mana);
         }
 
         private void DrawReviveMessages(WorldState world, float s)

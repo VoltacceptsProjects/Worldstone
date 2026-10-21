@@ -1,5 +1,4 @@
-﻿using Diablerie.Engine.World;
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
 
 namespace Diablerie.Game.UI.ControlPanel
@@ -10,6 +9,9 @@ namespace Diablerie.Game.UI.ControlPanel
         private Text label;
         private Image imgHealthBar;
 
+        // 0: player 1, 1: player 2 (set on the co-op copy of the panel)
+        public int playerIndex;
+
         void Awake()
         {
             imgHealthBar = GetComponent<Image>();
@@ -17,10 +19,11 @@ namespace Diablerie.Game.UI.ControlPanel
 
         void Update()
         {
-            if (WorldState.instance.Player == null)
+            var player = PanelPlayer.Get(playerIndex);
+            if (player == null || player.unit == null)
                 return;
-            float currHealth = WorldState.instance.Player.unit.health;
-            float maxHealth = WorldState.instance.Player.unit.maxHealth;
+            float currHealth = player.unit.health;
+            float maxHealth = player.unit.maxHealth;
             imgHealthBar.fillAmount = currHealth / maxHealth;
             label.text = "Life: " + currHealth + "/" + maxHealth;
         }

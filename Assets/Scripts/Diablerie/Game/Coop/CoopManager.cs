@@ -2,6 +2,7 @@ using Diablerie.Engine;
 using Diablerie.Engine.Datasheets;
 using Diablerie.Engine.Entities;
 using Diablerie.Engine.SaveGame;
+using Diablerie.Game.UI.ControlPanel;
 using Diablerie.Game.World;
 using Diablerie.Engine.World;
 using UnityEngine;
@@ -19,9 +20,11 @@ namespace Diablerie.Game.Coop
 
         // The view is a fixed 800x600 pixels and the camera looks at the middle between the players. These are the
         // largest distances, measured in screen pixels, that still keep both players inside of the picture.
+        // In co-op the control panels stand on the left and right side of the view (CoopControlPanel) and cover
+        // about 105 pixels of each, so the horizontal limits are smaller than the width of the view.
         // Soft: player 2 stops walking away. Hard: player 2 is brought back to player 1.
-        private static readonly Vector2 SoftLimit = new Vector2(560f, 360f) / Iso.pixelsPerUnit;
-        private static readonly Vector2 HardLimit = new Vector2(680f, 440f) / Iso.pixelsPerUnit;
+        private static readonly Vector2 SoftLimit = new Vector2(480f, 360f) / Iso.pixelsPerUnit;
+        private static readonly Vector2 HardLimit = new Vector2(540f, 440f) / Iso.pixelsPerUnit;
 
         // Where a player appears next to the other one
         private static readonly Vector2 SideOffset = new Vector2(2f, -2f);
@@ -40,6 +43,7 @@ namespace Diablerie.Game.Coop
             Instance = this;
             gameObject.AddComponent<CoopHud>();
             gameObject.AddComponent<CoopUiDriver>();
+            gameObject.AddComponent<CoopControlPanel>();
         }
 
         private void OnDestroy()
