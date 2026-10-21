@@ -338,9 +338,11 @@ namespace Diablerie.Game.UI
 
             AudioManager.instance.Play("cursor_select");
             var destination = row.entry;
-            var player = _player;
+            // The party travels together: player 1 goes, player 2 is brought along by the leash
+            var world = Diablerie.Engine.World.WorldState.instance;
+            var traveller = world != null && world.Player != null ? world.Player : _player;
             HideInternal();
-            WorldBuilder.TravelToWaypoint(player, destination);
+            WorldBuilder.TravelToWaypoint(traveller, destination);
         }
 
         private void Tick()

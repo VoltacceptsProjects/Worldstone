@@ -34,6 +34,12 @@ namespace Diablerie.Game.UI.Inventory
                 slot.SetPlayer(player);
             }
 
+            if (_player != null && panel != null)
+            {
+                foreach (var grid in panel.GetComponentsInChildren<InventoryGrid>(true))
+                    grid.Bind(_player, _player.inventory);
+            }
+
             UpdateEquip();
         }
 
@@ -78,6 +84,8 @@ namespace Diablerie.Game.UI.Inventory
 
         public void ToggleVisibility()
         {
+            if (Diablerie.Game.Coop.CoopUi.GuestOwns)
+                return;
             visible ^= true;
         }
 

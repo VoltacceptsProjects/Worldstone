@@ -34,6 +34,8 @@ namespace Diablerie.Engine.UI
         private const float MouseGraceSeconds = 2f;
         private float _lastMouseMove = -100f;
         private bool _padDriven;
+        private bool _guestDriven;
+        private int _lastOwner = 1;
         private bool _systemCursorHidden;
         private bool _active;
         private bool _cancelDown;
@@ -51,6 +53,8 @@ namespace Diablerie.Engine.UI
         private PadInput _input;
 
         public static bool Active => _instance != null && _instance._active;
+        // The cursor belongs to player 2 (his gamepad or keyboard moves it, the real mouse is ignored)
+        public static bool GuestDriven => _instance != null && _instance._active && _instance._guestDriven;
         public static bool CancelDown => _instance != null && _instance._cancelDown;
         public static bool ConfirmDown => _instance != null && _instance._confirmDown;
 
@@ -66,17 +70,17 @@ namespace Diablerie.Engine.UI
 
         public static bool Held(int button)
         {
-            return Input.GetMouseButton(button) || (button < 2 && _instance != null && _instance._held[button]);
+            return (!GuestDriven && Input.GetMouseButton(button)) || (button < 2 && _instance != null && _instance._held[button]);
         }
 
         public static bool ButtonDown(int button)
         {
-            return Input.GetMouseButtonDown(button) || (button < 2 && _instance != null && _instance._down[button]);
+            return (!GuestDriven && Input.GetMouseButtonDown(button)) || (button < 2 && _instance != null && _instance._down[button]);
         }
 
         public static bool ButtonUp(int button)
         {
-            return Input.GetMouseButtonUp(button) || (button < 2 && _instance != null && _instance._up[button]);
+            return (!GuestDriven && Input.GetMouseButtonUp(button)) || (button < 2 && _instance != null && _instance._up[button]);
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -107,8 +111,14 @@ namespace Diablerie.Engine.UI
 
         private void Update()
         {
+            bool inGame = InGame;
+            int owner = inGame && CoopUi.GuestOwns ? 2 : 1;
+            int pad = CoopPads.Joystick(owner);
+            bool keyboard = owner == 2 && pad == 0;
+            _guestDriven = owner == 2;
+
             Vector2 real = Input.mousePosition;
-            if ((real - _lastReal).sqrMagnitude > 1f)
+            if ((real - _lastReal).sqrMagnitude > 1f && !_guestDriven)
             {
                 _position = real;
                 _padDriven = false;
@@ -116,13 +126,19 @@ namespace Diablerie.Engine.UI
             }
             _lastReal = real;
 
-            int pad = CoopPads.Joystick(1);
-            bool inGame = InGame;
+            if (owner != _lastOwner)
+            {
+                _lastOwner = owner;
+                if (_guestDriven)
+                    _position = new Vector2(Screen.width / 2f, Screen.height / 2f);
+            }
 
             bool wasActive = _active;
-            _active = pad != 0 && (!inGame || ModalOpen());
+            _active = (pad != 0 || keyboard) && (!inGame || ModalOpen());
+            if (_guestDriven)
+                _padDriven = true;
             // The cursor shows up by itself, the sticks are not needed to find it. A mouse that was just used keeps it.
-            if (_active && !wasActive && Time.unscaledTime - _lastMouseMove > MouseGraceSeconds)
+            if (_active && !wasActive && !_guestDriven && Time.unscaledTime - _lastMouseMove > MouseGraceSeconds)
             {
                 if (!_padDriven)
                     _position = new Vector2(Screen.width / 2f, Screen.height / 2f);
@@ -136,7 +152,7 @@ namespace Diablerie.Engine.UI
             var now = new bool[2];
             if (_active)
             {
-                Vector2 stick = ReadSticks(1);
+                Vector2 stick = keyboard ? KeyboardStick() : ReadSticks(owner);
                 if (stick != Vector2.zero)
                 {
                     float speed = Screen.height * SpeedScreenHeights * Time.unscaledDeltaTime;
@@ -148,18 +164,18 @@ namespace Diablerie.Engine.UI
 
                 for (int i = 0; i < 2; ++i)
                 {
-                    bool raw = Input.GetKey(CoopPads.Key(1, i == 0 ? 0 : 2));
+                    bool raw = OwnerHeld(i, owner);
                     if (!raw)
                         _needRelease[i] = false;
                     now[i] = raw && !_needRelease[i];
                 }
-                _cancelDown = CoopPads.ButtonDown(1, 1);
-                _confirmDown = !inGame && CoopPads.ButtonDown(1, 7);
+                _cancelDown = keyboard ? Input.GetKeyDown(KeyCode.B) : CoopPads.ButtonDown(owner, 1);
+                _confirmDown = !inGame && owner == 1 && CoopPads.ButtonDown(1, 7);
                 if (inGame)
                 {
-                    if (CoopPads.ButtonDown(1, 5))
+                    if (keyboard ? Input.GetKeyDown(KeyCode.Tab) : CoopPads.ButtonDown(owner, 5))
                         CycleWindow(1);
-                    else if (CoopPads.ButtonDown(1, 4))
+                    else if (!keyboard && CoopPads.ButtonDown(owner, 4))
                         CycleWindow(-1);
                 }
             }
@@ -167,8 +183,8 @@ namespace Diablerie.Engine.UI
             // While the cursor is off, a held button is remembered so it has to be released first
             if (!_active)
             {
-                _needRelease[0] = pad != 0 && Input.GetKey(CoopPads.Key(1, 0));
-                _needRelease[1] = pad != 0 && Input.GetKey(CoopPads.Key(1, 2));
+                _needRelease[0] = OwnerHeld(0, 1) || OwnerHeld(0, 2);
+                _needRelease[1] = OwnerHeld(1, 1) || OwnerHeld(1, 2);
             }
 
             for (int i = 0; i < 2; ++i)
@@ -194,7 +210,7 @@ namespace Diablerie.Engine.UI
         // With a controller connected the system cursor is gone, the circle of this class takes its place
         private void LateUpdate()
         {
-            if (CoopPads.Joystick(1) != 0)
+            if (CoopPads.Joystick(1) != 0 || GuestDriven)
             {
                 Cursor.visible = false;
                 _systemCursorHidden = true;
@@ -204,6 +220,25 @@ namespace Diablerie.Engine.UI
                 _systemCursorHidden = false;
                 Cursor.visible = !SoftwareCursor.Showing;
             }
+        }
+
+        // Button 0: left click (A / E), button 1: right click (X / F)
+        private static bool OwnerHeld(int button, int owner)
+        {
+            if (CoopPads.Joystick(owner) != 0)
+                return Input.GetKey(CoopPads.Key(owner, button == 0 ? 0 : 2));
+            return owner == 2 && Input.GetKey(button == 0 ? KeyCode.E : KeyCode.F);
+        }
+
+        private static Vector2 KeyboardStick()
+        {
+            float x = 0f, y = 0f;
+            if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) x -= 1f;
+            if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) x += 1f;
+            if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) y -= 1f;
+            if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) y += 1f;
+            var value = new Vector2(x, y);
+            return value == Vector2.zero ? value : value.normalized;
         }
 
         private static Vector2 ReadSticks(int player)
@@ -311,7 +346,7 @@ namespace Diablerie.Engine.UI
             float x = _position.x;
             float y = Screen.height - _position.y;
             var previous = GUI.color;
-            GUI.color = Color.white;
+            GUI.color = _guestDriven ? new Color(0.35f, 0.8f, 1f) : Color.white;
             GUI.DrawTexture(new Rect(x - CursorDrawSize / 2f, y - CursorDrawSize / 2f, CursorDrawSize, CursorDrawSize), _cursorTexture);
             GUI.color = previous;
         }

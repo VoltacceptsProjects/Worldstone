@@ -39,6 +39,7 @@ namespace Diablerie.Game.Coop
         {
             Instance = this;
             gameObject.AddComponent<CoopHud>();
+            gameObject.AddComponent<CoopUiDriver>();
         }
 
         private void OnDestroy()
@@ -143,6 +144,8 @@ namespace Diablerie.Game.Coop
                 GiveItems(player2, "mp1", 3);
             }
 
+            // One stash for the whole party, it is saved with player 1
+            player2.stash = player1.stash;
             world.Player2 = player2;
             player2.unit.InstantMove(player1.unit.iso.pos + SideOffset);
             CoopSettings.Player2Character = player2.name;
@@ -174,6 +177,9 @@ namespace Diablerie.Game.Coop
                 return;
 
             SaveGuest(WorldBuilder.CurrentActNumber);
+            if (CoopUi.Owner == player2)
+                CoopUi.CloseAll();
+            CoopUi.Reset();
             world.Player2 = null;
             CoopSettings.Enabled = false;
             if (player2.unit != null)

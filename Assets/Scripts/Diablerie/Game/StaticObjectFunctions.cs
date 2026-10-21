@@ -25,9 +25,9 @@ namespace Diablerie.Game
         
         private static void OperateWaypoint(StaticObject staticObject, Unit unit)
         {
-            var player = WorldState.instance.Player;
+            var player = WorldState.instance.PlayerOf(unit);
             var entry = Waypoints.OfObject(staticObject);
-            if (player == null || unit != player.unit || entry == null)
+            if (player == null || entry == null || !Diablerie.Game.Coop.CoopUi.TryClaim(player))
             {
                 if (staticObject.Mode == StaticObjectMode.Neutral)
                 {
@@ -49,8 +49,8 @@ namespace Diablerie.Game
 
         private static void OperateStash(Unit unit)
         {
-            var player = WorldState.instance.Player;
-            if (player == null || unit != player.unit)
+            var player = WorldState.instance.PlayerOf(unit);
+            if (player == null || !Diablerie.Game.Coop.CoopUi.TryClaim(player))
                 return;
 
             AudioManager.instance.Play("cursor_select");

@@ -20,6 +20,7 @@ namespace Diablerie.Engine
         public CameraController cameraController;
 
         private Player player;
+        private Player uiPlayer;
         private bool flush = false;
         private bool usingSkills = false;
         private bool skillLatch = false;
@@ -175,16 +176,35 @@ namespace Diablerie.Engine
         public void SetPlayer(Player player)
         {
             this.player = player;
-            InventoryPanel.instance.SetPlayer(player);
-            OnHandsItemChanged(player.HandsItem);
-            player.HandsItemChanged += OnHandsItemChanged;
-            player.IdentifyScrollChanged += OnIdentifyScrollChanged;
+            SetUiPlayer(player);
             QuestPanel.BindMinipanelButton();
+        }
+
+        // The player the inventory, the cursor item and identify mode belong to. Player 1 unless the
+        // co-op guest has the windows open.
+        public void SetUiPlayer(Player target)
+        {
+            if (target == null || uiPlayer == target)
+                return;
+            if (uiPlayer != null)
+            {
+                uiPlayer.HandsItemChanged -= OnHandsItemChanged;
+                uiPlayer.IdentifyScrollChanged -= OnIdentifyScrollChanged;
+            }
+
+            uiPlayer = target;
+            InventoryPanel.instance.SetPlayer(target);
+            target.HandsItemChanged += OnHandsItemChanged;
+            target.IdentifyScrollChanged += OnIdentifyScrollChanged;
+            if (target.IdentifyScroll != null)
+                OnIdentifyScrollChanged(target.IdentifyScroll);
+            else
+                OnHandsItemChanged(target.HandsItem);
         }
 
         public bool Take(Item item)
         {
-            bool took = player.Take(item, preferHands: InventoryPanel.instance.visible);
+            bool took = player.Take(item, preferHands: InventoryPanel.instance.visible && !Diablerie.Game.Coop.CoopUi.GuestOwns);
             if (took)
             {
                 AudioManager.instance.Play(SoundInfo.itemPickup);
@@ -202,7 +222,7 @@ namespace Diablerie.Engine
         {
             if (scroll == null)
             {
-                OnHandsItemChanged(player.HandsItem);
+                OnHandsItemChanged(uiPlayer.HandsItem);
                 return;
             }
 
@@ -259,14 +279,14 @@ namespace Diablerie.Engine
 
         void HandleKeyboard()
         {
-            if (player != null && player.IdentifyScroll != null)
+            if (uiPlayer != null && uiPlayer.IdentifyScroll != null)
             {
                 // Identify mode only makes sense with the inventory open. Escape puts the scroll away.
                 if (!InventoryPanel.instance.visible)
-                    player.CancelIdentify();
+                    uiPlayer.CancelIdentify();
                 else if (Input.GetKeyDown(KeyCode.Escape))
                 {
-                    player.CancelIdentify();
+                    uiPlayer.CancelIdentify();
                     return;
                 }
             }
@@ -332,18 +352,19 @@ namespace Diablerie.Engine
                     CommandPrompt.instance.visible = true;
                 }
 
-                if (Input.GetKeyDown(KeyCode.I))
+                bool guestOwns = Diablerie.Game.Coop.CoopUi.GuestOwns;
+                if (Input.GetKeyDown(KeyCode.I) && !guestOwns)
                 {
                     InventoryPanel.instance.visible ^= true;
                 }
 
-                if (Input.GetKeyDown(KeyCode.C))
+                if (Input.GetKeyDown(KeyCode.C) && !guestOwns)
                 {
                     QuestPanel.Hide();
                     CharstatPanel.instance.visible ^= true;
                 }
 
-                if (Input.GetKeyDown(KeyCode.Q))
+                if (Input.GetKeyDown(KeyCode.Q) && !guestOwns)
                 {
                     QuestPanel.Toggle();
                 }
@@ -495,7 +516,10 @@ namespace Diablerie.Engine
             
             HandleKeyboard();
             UpdateCamera();
-            
+
+            // Player 2 has the windows and the cursor: the mouse is not player 1's for now
+            if (Diablerie.Game.Coop.CoopUi.GuestOwns)
+                return;
 
             if (flush && (Diablerie.Engine.UI.GamepadCursor.Held(0) || Diablerie.Engine.UI.GamepadCursor.Held(1)))
                 return;

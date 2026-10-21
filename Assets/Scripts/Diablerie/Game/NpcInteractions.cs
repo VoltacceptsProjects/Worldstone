@@ -40,9 +40,8 @@ namespace Diablerie.Game
 
             initiator.LookAt(target.iso.pos);
 
-            var player = WorldState.instance.Player;
-            bool byPlayer = player != null && player.unit == initiator;
-            if (!byPlayer)
+            var player = WorldState.instance.PlayerOf(initiator);
+            if (player == null || !Diablerie.Game.Coop.CoopUi.TryClaim(player))
             {
                 NpcVoice.PlayGreeting(target);
                 return;

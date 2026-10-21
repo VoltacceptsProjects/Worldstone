@@ -120,7 +120,7 @@ namespace Diablerie.Game.UI.Inventory
             highlighter.gameObject.SetActive(false);
 
             // TODO pass the player and the inventory to the constructor (it's required to get rid of prefabs first)
-            player = WorldState.instance.Player;
+            player = Diablerie.Game.Coop.CoopUi.Owner ?? WorldState.instance.Player;
             if (pendingInventory != null)
             {
                 inventory = pendingInventory;
@@ -135,6 +135,9 @@ namespace Diablerie.Game.UI.Inventory
         public void Bind(Player newPlayer, Engine.Inventory newInventory)
         {
             player = newPlayer;
+            // Not awake yet: Awake takes the inventory of the window owner
+            if (highlighter == null)
+                return;
             inventory = newInventory;
         }
 
@@ -271,7 +274,7 @@ namespace Diablerie.Game.UI.Inventory
                     {
                         AudioManager.instance.Play(item.useSound);
                         _inventory.Take(cell.x, cell.y);
-                        WorldState.instance.Player.Use(item.info.misc);
+                        player.Use(item.info.misc);
                     }
                 }
             }

@@ -18,7 +18,12 @@ namespace Diablerie.Game.Coop
     //   LB (hold)                  show item labels (player 1)
     //   D-pad left, up, down, right   belt slots 1, 2, 3, 4: drinks a potion
     //   View (Back)                automap (player 1)
-    //   Menu (Start)               game menu (player 1)
+    //   Menu (Start)               game menu (player 1), inventory / close the windows (player 2)
+    //
+    // Player 2 has his own windows: Start (Tab on the keyboard) opens the inventory, then the window cursor
+    // is his: sticks (WASD / arrows) move it, A / X (E / F) click, LB / RB (Tab) switch window, B (B) closes.
+    // Talking to townspeople, the stash and waypoints work with A (E) next to them, the windows then belong
+    // to player 2 until he closes them. Only one player can have windows open at a time.
     //
     // Player 1 takes the skills from the skill bar (F1..F6), player 2 plays four fixed skills of the class
     // (A, X, B, Y). Skills auto aim at the closest enemy, otherwise they go the way the stick points.
@@ -116,7 +121,16 @@ namespace Diablerie.Game.Coop
             }
 
             // Player 1 uses the cursor while a window is open
-            if (_main && Diablerie.Engine.UI.GamepadCursor.Active)
+            // Player 2 has windows open: the cursor is his, the character stands still
+            if (!_main && CoopUi.GuestOwns)
+            {
+                StopWalking();
+                if (PadButtonDown(_pad, 7))
+                    CoopUi.ToggleGuestMenu(_player);
+                return;
+            }
+
+            if (_main && Diablerie.Engine.UI.GamepadCursor.Active && !CoopUi.GuestOwns)
             {
                 StopWalking();
                 return;
@@ -149,6 +163,12 @@ namespace Diablerie.Game.Coop
             {
                 if (PadButtonDown(_pad, 8))
                     _unit.run = !_unit.run;
+                if (PadButtonDown(_pad, 7) || Input.GetKeyDown(KeyCode.Tab))
+                {
+                    StopWalking();
+                    CoopUi.ToggleGuestMenu(_player);
+                    return;
+                }
                 if (Input.GetKeyDown(KeyCode.Alpha1))
                     DrinkPotion(health: true);
                 if (Input.GetKeyDown(KeyCode.Alpha2))
@@ -259,7 +279,7 @@ namespace Diablerie.Game.Coop
         // a close or an interaction does not start casting by itself.
         private void UpdateSkillLatch()
         {
-            bool blocked = _main ? SkillGate.Blocked : SkillGate.WorldBlocked;
+            bool blocked = _main ? SkillGate.Blocked : SkillGate.WorldBlocked || CoopUi.GuestOwns;
             if (blocked)
             {
                 _skillLatch = true;
@@ -400,7 +420,7 @@ namespace Diablerie.Game.Coop
             foreach (var entity in WorldState.instance.Entities)
             {
                 bool loot = entity is Loot;
-                bool townsfolk = _main && entity is Unit npc && npc != _unit && npc.monStat != null && npc.monStat.npc;
+                bool townsfolk = entity is Unit npc && npc != _unit && npc.monStat != null && npc.monStat.npc;
                 if (!loot && !townsfolk && !(entity is StaticObject))
                     continue;
                 if (!entity.selectable)

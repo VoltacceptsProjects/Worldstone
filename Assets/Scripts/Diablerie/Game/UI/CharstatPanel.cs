@@ -15,6 +15,8 @@ namespace Diablerie.Game.UI
 
         public void ToggleVisibility()
         {
+            if (Diablerie.Game.Coop.CoopUi.GuestOwns)
+                return;
             visible ^= true;
         }
 
