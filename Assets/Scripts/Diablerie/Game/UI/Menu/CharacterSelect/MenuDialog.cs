@@ -89,9 +89,9 @@ namespace Diablerie.Game.UI.Menu.CharacterSelect
             if (_closed)
                 return;
 
-            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Diablerie.Engine.UI.GamepadCursor.ConfirmDown)
                 Accept();
-            else if (Input.GetKeyDown(KeyCode.Escape))
+            else if (Input.GetKeyDown(KeyCode.Escape) || Diablerie.Engine.UI.GamepadCursor.CancelDown)
                 Cancel();
         }
 

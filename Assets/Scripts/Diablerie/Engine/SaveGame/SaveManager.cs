@@ -34,18 +34,20 @@ namespace Diablerie.Engine.SaveGame
             return List().Exists(c => string.Equals(c.name, characterName, StringComparison.OrdinalIgnoreCase));
         }
 
-        public static bool Save(Player player, int act)
+        // A guest is the second player of couch co-op: the shared stash and the skill bar belong to the main player
+        public static bool Save(Player player, int act, bool guest = false)
         {
             if (player == null)
                 return false;
 
             try
             {
-                var save = Capture(player, act);
+                var save = Capture(player, act, guest);
                 string json = JsonUtility.ToJson(save, prettyPrint: true);
                 WriteAtomically(GetPath(save.name), json);
                 Debug.Log("Character saved: " + GetPath(save.name));
-                SaveSharedStash(player);
+                if (!guest)
+                    SaveSharedStash(player);
                 return true;
             }
             catch (Exception e)
@@ -195,7 +197,7 @@ namespace Diablerie.Engine.SaveGame
             }
         }
 
-        public static CharacterSave Capture(Player player, int act)
+        public static CharacterSave Capture(Player player, int act, bool guest = false)
         {
             var save = new CharacterSave
             {
@@ -239,8 +241,21 @@ namespace Diablerie.Engine.SaveGame
             save.waypoints.AddRange(player.waypoints);
             save.waypoints.Sort();
 
-            if (PlayerController.instance != null)
+            if (guest)
+            {
+                // The guest has no skill bar, keep what an earlier session stored
+                var previous = Load(player.name);
+                if (previous != null)
+                {
+                    save.hotSkills = previous.hotSkills;
+                    save.leftSkill = previous.leftSkill;
+                    save.rightSkill = previous.rightSkill;
+                }
+            }
+            else if (PlayerController.instance != null)
+            {
                 PlayerController.instance.WriteSkills(save);
+            }
 
             // Save quest data
             var questManager = QuestManager.Instance;
@@ -253,7 +268,7 @@ namespace Diablerie.Engine.SaveGame
         }
 
         // Applies a save to a freshly created player (no starting items given yet).
-        public static void Restore(Player player, CharacterSave save)
+        public static void Restore(Player player, CharacterSave save, bool guest = false)
         {
             player.charStat.level = Mathf.Max(1, save.level);
             player.charStat.experience = (uint)System.Math.Max(0L, save.experience);
@@ -305,8 +320,8 @@ namespace Diablerie.Engine.SaveGame
             player.unit.health = Mathf.Clamp(save.health, 1, player.unit.maxHealth);
             player.unit.mana = Mathf.Clamp(save.mana, 0, player.unit.maxMana);
 
-            // Restore quest data
-            if (save.questData != null)
+            // The quests belong to the world of the main player
+            if (!guest && save.questData != null)
             {
                 var questManager = QuestManager.Instance;
                 if (questManager != null)

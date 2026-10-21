@@ -61,7 +61,7 @@ namespace Diablerie.Game.Coop
         {
             var origin = ViewOrigin(s);
             var rect = new Rect(origin.x, origin.y + 6f * s, CameraController.VirtualWidth * s, 20f * s);
-            DrawLabel(rect, "Player 2: press START on a controller (or F9) to join", Color.white);
+            DrawLabel(rect, "Player 2: press START on controller 2 (or F9) to join", Color.white);
         }
 
         private void DrawOverhead(Player player, string tag, Color color, float s)

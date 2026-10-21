@@ -139,7 +139,7 @@ namespace Diablerie.Engine
         private Entity CalcHotEntity()
         {
             Vector3 currentPosition = new Vector3();
-            Vector3 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+            Vector3 mousePos = Camera.main.ScreenToWorldPoint(Diablerie.Engine.UI.GamepadCursor.Position);
             mousePos.z = 0;
             Entity bestMatch = null;
             foreach (var entity in WorldState.instance.Entities)

@@ -9,7 +9,7 @@ namespace Diablerie.Engine
 
         void Update()
         {
-            Vector3 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+            Vector3 mousePos = Camera.main.ScreenToWorldPoint(Diablerie.Engine.UI.GamepadCursor.Position);
             mousePosition = Iso.MapToIso(mousePos);
             mouseTile = Iso.Snap(mousePosition);
         }

@@ -22,6 +22,7 @@ namespace Diablerie.Engine
         private Player player;
         private bool flush = false;
         private bool usingSkills = false;
+        private bool skillLatch = false;
         private bool run = true;
     
         private List<SkillInfo> availableSkills;
@@ -123,6 +124,20 @@ namespace Diablerie.Engine
             SetHotSkill(3, SkillInfo.Find("Teleport"));
             SetHotSkill(4, SkillInfo.Find("Nova"));
             SetHotSkill(5, SkillInfo.Find("Frozen Orb"));
+        }
+
+        public void ToggleRun()
+        {
+            run = !run;
+        }
+
+        public SkillInfo LeftSkill => leftSkill;
+
+        public SkillInfo RightSkill => rightSkill;
+
+        public SkillInfo GetHotSkill(int index)
+        {
+            return index >= 0 && index < hotSkills.Count ? hotSkills[index] : null;
         }
 
         public void WriteSkills(CharacterSave save)
@@ -257,31 +272,33 @@ namespace Diablerie.Engine
             }
 
             bool highlightLoot = Input.GetKey(KeyCode.LeftAlt) | Input.GetKey(KeyCode.RightAlt);
+            if (!Diablerie.Engine.UI.GamepadCursor.Active && Diablerie.Game.Coop.CoopPads.Joystick(1) != 0)
+                highlightLoot |= Input.GetKey(Diablerie.Game.Coop.CoopPads.Key(1, 4)); // LB: show item labels
             MouseSelection.instance.SetHighlightLoot(highlightLoot);
             if (NpcDialog.IsVisible)
             {
-                if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space))
+                if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space) || Diablerie.Engine.UI.GamepadCursor.CancelDown)
                 {
                     NpcDialog.Hide();
                 }
             }
             else if (QuestPanel.IsVisible && !InventoryPanel.instance.visible)
             {
-                if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space))
+                if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space) || Diablerie.Engine.UI.GamepadCursor.CancelDown)
                 {
                     QuestPanel.Hide();
                 }
             }
             else if (WaypointPanel.IsVisible)
             {
-                if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space))
+                if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space) || Diablerie.Engine.UI.GamepadCursor.CancelDown)
                 {
                     WaypointPanel.Hide();
                 }
             }
             else if (GamblePanel.IsVisible)
             {
-                if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space))
+                if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space) || Diablerie.Engine.UI.GamepadCursor.CancelDown)
                 {
                     GamblePanel.Hide();
                     InventoryPanel.instance.visible = false;
@@ -289,7 +306,7 @@ namespace Diablerie.Engine
             }
             else if (StashPanel.IsVisible)
             {
-                if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space))
+                if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space) || Diablerie.Engine.UI.GamepadCursor.CancelDown)
                 {
                     StashPanel.Hide();
                     InventoryPanel.instance.visible = false;
@@ -297,7 +314,7 @@ namespace Diablerie.Engine
             }
             else if (InventoryPanel.instance.visible || CharstatPanel.instance.visible)
             {
-                if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space))
+                if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space) || Diablerie.Engine.UI.GamepadCursor.CancelDown)
                 {
                     InventoryPanel.instance.visible = false;
                     CharstatPanel.instance.visible = false;
@@ -373,7 +390,7 @@ namespace Diablerie.Engine
 
             if (player.HandsItem != null)
             {
-                if (Input.GetMouseButtonDown(0))
+                if (Diablerie.Engine.UI.GamepadCursor.ButtonDown(0))
                 {
                     Loot.Create(player.transform.position, player.HandsItem);
                     FlushInput();
@@ -387,7 +404,7 @@ namespace Diablerie.Engine
             {
                 SkillInfo skill = hotSkills[i];
                 KeyCode key = hotSkillsBindings[i];
-                if (skill == null || !Input.GetKey(key))
+                if (skillLatch || skill == null || !Input.GetKey(key))
                     continue;
             
                 usingSkills = true;
@@ -407,11 +424,11 @@ namespace Diablerie.Engine
 
             if (!usingSkills)
             {
-                if (Input.GetMouseButton(1) || (Input.GetKey(KeyCode.LeftShift) && Input.GetMouseButton(0)))
+                if (Diablerie.Engine.UI.GamepadCursor.Held(1) || (Input.GetKey(KeyCode.LeftShift) && Diablerie.Engine.UI.GamepadCursor.Held(0)))
                 {
                     player.unit.UseSkill(rightSkill, IsoInput.mousePosition);
                 }
-                else if (Input.GetMouseButton(0))
+                else if (Diablerie.Engine.UI.GamepadCursor.Held(0))
                 {
                     if (MouseSelection.instance.HotEntity != null)
                     {
@@ -444,11 +461,33 @@ namespace Diablerie.Engine
 
         public bool FixedSelection()
         {
-            return Input.GetMouseButton(0) || player.HandsItem != null || usingSkills;
+            return Diablerie.Engine.UI.GamepadCursor.Held(0) || player.HandsItem != null || usingSkills;
+        }
+
+        // No skills while a menu / window is open or just closed. Keys held through that stay dead until released.
+        void UpdateSkillLatch()
+        {
+            if (Diablerie.Game.Coop.SkillGate.Blocked)
+            {
+                skillLatch = true;
+                return;
+            }
+
+            if (!skillLatch)
+                return;
+            foreach (var key in hotSkillsBindings)
+            {
+                if (Input.GetKey(key))
+                    return;
+            }
+
+            skillLatch = false;
         }
 
         void Update()
         {
+            UpdateSkillLatch();
+
             if (GameMenu.IsVisible())
                 return;
             
@@ -456,7 +495,7 @@ namespace Diablerie.Engine
             UpdateCamera();
             
 
-            if (flush && (Input.GetMouseButton(0) || Input.GetMouseButton(1)))
+            if (flush && (Diablerie.Engine.UI.GamepadCursor.Held(0) || Diablerie.Engine.UI.GamepadCursor.Held(1)))
                 return;
 
             flush = false;

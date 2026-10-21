@@ -83,7 +83,7 @@ namespace Diablerie.Engine.UI
 
         private Loot CalculateHotLoot()
         {
-            pointerData.position = Input.mousePosition;
+            pointerData.position = Diablerie.Engine.UI.GamepadCursor.Position;
 
             EventSystem.current.RaycastAll(pointerData, raycastResults);
 

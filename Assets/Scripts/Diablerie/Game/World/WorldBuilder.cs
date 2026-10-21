@@ -106,6 +106,7 @@ namespace Diablerie.Game.World
             if (instance == null)
                 return;
             SaveManager.Save(WorldState.instance.Player, instance._currentActNumber);
+            Diablerie.Game.Coop.CoopManager.SaveGuest(instance._currentActNumber);
         }
 
         static Act CreateAct(int actNumber)

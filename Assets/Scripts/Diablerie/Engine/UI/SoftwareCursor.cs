@@ -26,6 +26,8 @@ namespace Diablerie.Engine.UI
             _image.raycastTarget = false;
         }
 
+        public static bool Showing => instance != null && instance._root.activeSelf;
+
         public static void SetCursor(Texture2D texture)
         {
             SetCursor(texture, Vector2.zero);
@@ -49,7 +51,7 @@ namespace Diablerie.Engine.UI
 
         private void UpdatePosition()
         {
-            _rectTransform.anchoredPosition = Ui.ScreenToCanvasPoint(Input.mousePosition);
+            _rectTransform.anchoredPosition = Ui.ScreenToCanvasPoint(Diablerie.Engine.UI.GamepadCursor.Position);
         }
 
         private class InternalBehaviour : MonoBehaviour

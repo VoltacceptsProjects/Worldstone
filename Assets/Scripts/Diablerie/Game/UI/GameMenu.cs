@@ -186,14 +186,14 @@ namespace Diablerie.Game.UI
                 // Follow the scale of the game view, which changes with the window size
                 menu.canvasScaler.scaleFactor = CameraController.UiScale;
                 UpdateSelectedItem();
-                if (Input.GetKeyDown(KeyCode.Escape))
+                if (Input.GetKeyDown(KeyCode.Escape) || Diablerie.Engine.UI.GamepadCursor.CancelDown)
                     Hide();
             }
 
             private void UpdateSelectedItem()
             {
                 raycastResults.Clear();
-                pointerEventData.position = Input.mousePosition;
+                pointerEventData.position = Diablerie.Engine.UI.GamepadCursor.Position;
                 menu.raycaster.Raycast(pointerEventData, raycastResults);
                 if (raycastResults.Count != 0)
                 {

@@ -95,6 +95,11 @@ namespace Diablerie.Engine
             return new Player(className, characterName, pos, null, guest: true);
         }
 
+        public static Player CreateGuest(CharacterSave save, Vector2i pos)
+        {
+            return new Player(save.className, save.name, pos, save, guest: true);
+        }
+
         private Player(string className, string characterName, Vector2i pos, CharacterSave save, bool guest = false)
         {
             name = characterName;
@@ -142,7 +147,7 @@ namespace Diablerie.Engine
 
             if (save != null)
             {
-                SaveManager.Restore(this, save);
+                SaveManager.Restore(this, save, guest);
             }
             else
             {

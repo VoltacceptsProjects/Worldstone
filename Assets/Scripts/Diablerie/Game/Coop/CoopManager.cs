@@ -1,6 +1,8 @@
 using Diablerie.Engine;
 using Diablerie.Engine.Datasheets;
 using Diablerie.Engine.Entities;
+using Diablerie.Engine.SaveGame;
+using Diablerie.Game.World;
 using Diablerie.Engine.World;
 using UnityEngine;
 
@@ -27,6 +29,7 @@ namespace Diablerie.Game.Coop
         private readonly float[] _deadSince = { -1f, -1f };
         private float _nextPullTime;
         private float _firstSeen = -1f;
+        private CoopPlayerInput _player1Input;
 
         public bool ShowJoinHint =>
             WorldState.instance != null && WorldState.instance.Player2 == null &&
@@ -53,6 +56,12 @@ namespace Diablerie.Game.Coop
             if (_firstSeen < 0f)
                 _firstSeen = Time.unscaledTime;
 
+            if (_player1Input == null && world.Player.unit != null)
+            {
+                _player1Input = world.Player.gameObject.AddComponent<CoopPlayerInput>();
+                _player1Input.InitMain(world.Player, 1);
+            }
+
             if (world.Player2 == null)
             {
                 bool loading = PlayerController.instance == null || !PlayerController.instance.enabled;
@@ -75,7 +84,7 @@ namespace Diablerie.Game.Coop
 
         private static bool JoinPressed()
         {
-            return Input.GetKeyDown(KeyCode.F9) || Input.GetKeyDown(KeyCode.JoystickButton7);
+            return Input.GetKeyDown(KeyCode.F9) || CoopPads.ButtonDown(2, 7);
         }
 
         #region Join and leave
@@ -97,42 +106,64 @@ namespace Diablerie.Game.Coop
                 return;
             }
 
-            string className = CoopSettings.FindClass(argument);
-            if (className == null)
+            // A saved character wins over a class of the same name
+            bool isSave = CoopSettings.ResolvePlayer2Save(world.Player.name, argument) != null;
+            if (!isSave && CoopSettings.FindClass(argument) == null)
             {
-                Debug.LogWarning("Unknown class " + argument);
+                Debug.LogWarning("Unknown character or class " + argument);
                 return;
             }
 
-            CoopSettings.Player2Class = className;
             if (world.Player2 != null)
                 manager.Leave();
-            manager.Join(className);
+            manager.Join(argument);
         }
 
-        private void Join(string className)
+        // argument: the name of a saved character or a class for a new one, null for the remembered character
+        private void Join(string argument)
         {
             var world = WorldState.instance;
             var player1 = world.Player;
             if (player1.unit == null)
                 return;
 
-            string classToPlay = className ?? CoopSettings.ResolvePlayer2Class(player1.charStatInfo.className);
-            var player2 = Player.CreateGuest(classToPlay, "Player 2", Iso.Snap(player1.unit.iso.pos / Iso.SubTileCount));
-            world.Player2 = player2;
-            // The spawn tile is taken by player 1, this finds a free spot next to it
-            player2.unit.InstantMove(player1.unit.iso.pos + SideOffset);
+            // The spawn tile is taken by player 1, InstantMove below finds a free spot next to it
+            var spawn = Iso.Snap(player1.unit.iso.pos / Iso.SubTileCount);
+            var save = CoopSettings.ResolvePlayer2Save(player1.name, argument);
+            Player player2;
+            if (save != null)
+            {
+                player2 = Player.CreateGuest(save, spawn);
+            }
+            else
+            {
+                string className = CoopSettings.FindClass(argument) ?? CoopSettings.ResolvePlayer2Class(player1.charStatInfo.className);
+                player2 = Player.CreateGuest(className, CoopSettings.NewCharacterName(className), spawn);
+                GiveItems(player2, "hp1", 4);
+                GiveItems(player2, "mp1", 3);
+            }
 
-            GiveItems(player2, "hp1", 4);
-            GiveItems(player2, "mp1", 3);
+            world.Player2 = player2;
+            player2.unit.InstantMove(player1.unit.iso.pos + SideOffset);
+            CoopSettings.Player2Character = player2.name;
 
             var input = player2.gameObject.AddComponent<CoopPlayerInput>();
-            input.Init(player2, CoopSettings.LoadoutFor(classToPlay));
+            input.Init(player2, 2, CoopSettings.LoadoutFor(player2.charStatInfo.className));
 
             _deadSince[0] = -1f;
             _deadSince[1] = -1f;
             CoopSettings.Enabled = true;
-            Debug.Log("Player 2 joined as " + classToPlay);
+            SaveGuest(WorldBuilder.CurrentActNumber);
+            Debug.Log("Player 2 joined as " + player2.name + " (" + player2.charStatInfo.className + ")");
+        }
+
+        // Player 2 is a real character, saved together with player 1
+        public static void SaveGuest(int act)
+        {
+            var world = WorldState.instance;
+            if (world == null || world.Player2 == null || world.Player2.unit == null)
+                return;
+            SaveManager.Save(world.Player2, act, guest: true);
         }
 
         private void Leave()
@@ -142,6 +173,7 @@ namespace Diablerie.Game.Coop
             if (player2 == null)
                 return;
 
+            SaveGuest(WorldBuilder.CurrentActNumber);
             world.Player2 = null;
             CoopSettings.Enabled = false;
             if (player2.unit != null)
@@ -166,14 +198,15 @@ namespace Diablerie.Game.Coop
 
         #region One screen for two players
 
-        // Player 2 never walks off the screen: walking further away is simply not possible
-        public Vector2 ClampMovementToLeash(Vector2 worldDirection)
+        // Neither player walks off the screen: walking further away from the other one is simply not possible
+        public Vector2 ClampMovementToLeash(Player mover, Vector2 worldDirection)
         {
             var world = WorldState.instance;
             if (world == null || world.Player == null || world.Player2 == null)
                 return worldDirection;
 
-            Vector3 apart = world.Player2.transform.position - world.Player.transform.position;
+            var other = mover == world.Player ? world.Player2 : world.Player;
+            Vector3 apart = mover.transform.position - other.transform.position;
             if (Mathf.Abs(apart.x) >= SoftLimit.x && worldDirection.x * apart.x > 0f)
                 worldDirection.x = 0f;
             if (Mathf.Abs(apart.y) >= SoftLimit.y && worldDirection.y * apart.y > 0f)

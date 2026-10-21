@@ -1,5 +1,6 @@
 using System;
 using Diablerie.Engine.Datasheets;
+using Diablerie.Engine.SaveGame;
 using UnityEngine;
 
 namespace Diablerie.Game.Coop
@@ -27,6 +28,63 @@ namespace Diablerie.Game.Coop
                 PlayerPrefs.SetString(ClassKey, value ?? "");
                 PlayerPrefs.Save();
             }
+        }
+
+        private const string CharacterKey = "coop.player2.character";
+
+        // The saved character player 2 plays, empty means "the most recently played one that is not player 1"
+        public static string Player2Character
+        {
+            get => PlayerPrefs.GetString(CharacterKey, "");
+            set
+            {
+                PlayerPrefs.SetString(CharacterKey, value ?? "");
+                PlayerPrefs.Save();
+            }
+        }
+
+        // The save player 2 plays. With a name: that character. Without: the remembered one, else the latest
+        // one that is not player 1. Null means there is none and a new character has to be made.
+        public static CharacterSave ResolvePlayer2Save(string player1Name, string name)
+        {
+            if (!string.IsNullOrEmpty(name))
+                return FindSave(name, player1Name);
+
+            var remembered = FindSave(Player2Character, player1Name);
+            if (remembered != null)
+                return remembered;
+
+            foreach (var info in SaveManager.List())
+            {
+                var save = FindSave(info.name, player1Name);
+                if (save != null)
+                    return save;
+            }
+
+            return null;
+        }
+
+        private static CharacterSave FindSave(string name, string player1Name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return null;
+            foreach (var info in SaveManager.List())
+            {
+                if (!string.Equals(info.name, name, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (string.Equals(info.name, player1Name, StringComparison.OrdinalIgnoreCase))
+                    return null;
+                return SaveManager.Load(info.name);
+            }
+            return null;
+        }
+
+        public static string NewCharacterName(string className)
+        {
+            string name = className;
+            for (int i = 2; SaveManager.NameExists(name); ++i)
+                name = className + " " + i;
+            return name;
         }
 
         public static string ResolvePlayer2Class(string player1Class)

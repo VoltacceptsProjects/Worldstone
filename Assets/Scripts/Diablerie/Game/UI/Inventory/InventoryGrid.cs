@@ -206,7 +206,7 @@ namespace Diablerie.Game.UI.Inventory
         {
             if (clickOverride != null)
             {
-                clickOverride(GetPointerCell(Input.mousePosition), eventData.button);
+                clickOverride(GetPointerCell(Diablerie.Engine.UI.GamepadCursor.Position), eventData.button);
                 return;
             }
 
@@ -307,7 +307,7 @@ namespace Diablerie.Game.UI.Inventory
 
         private Vector2i MouseCell()
         {
-            Vector3 pointerPosition = Input.mousePosition;
+            Vector3 pointerPosition = Diablerie.Engine.UI.GamepadCursor.Position;
             if (player.HandsItem != null)
             {
                 pointerPosition -= new Vector3(player.HandsItem.info.invWidth * cellSizeX, player.HandsItem.info.invHeight * cellSizeY) / 2;
@@ -340,7 +340,7 @@ namespace Diablerie.Game.UI.Inventory
         
             ClearHighlights();
 
-            var cell = clickOverride != null ? GetPointerCell(Input.mousePosition) : MouseCell();
+            var cell = clickOverride != null ? GetPointerCell(Diablerie.Engine.UI.GamepadCursor.Position) : MouseCell();
             if (player.HandsItem != null && clickOverride == null)
             {
                 SetRect(highlighter, cell.x, cell.y, player.HandsItem.info.invWidth, player.HandsItem.info.invHeight);
@@ -368,7 +368,7 @@ namespace Diablerie.Game.UI.Inventory
                     RawImage bg = itemsBackgrounds[entryIndex];
                     bg.color = Colors.InvItemHighlight;
                     Engine.Inventory.Entry entry = _inventory.entries[entryIndex];
-                    Ui.ShowScreenLabel(Input.mousePosition, describeOverride != null ? describeOverride(entry.item) : entry.item.GetDescription());
+                    Ui.ShowScreenLabel(Diablerie.Engine.UI.GamepadCursor.Position, describeOverride != null ? describeOverride(entry.item) : entry.item.GetDescription());
                 }
             }
         }

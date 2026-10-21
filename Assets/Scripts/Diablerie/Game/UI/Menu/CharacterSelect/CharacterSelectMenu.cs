@@ -394,11 +394,11 @@ namespace Diablerie.Game.UI.Menu.CharacterSelect
             if (!_root.activeSelf || _dialog != null || Time.frameCount < _ignoreInputUntilFrame)
                 return;
 
-            if (Input.GetKeyDown(KeyCode.Escape))
+            if (Input.GetKeyDown(KeyCode.Escape) || Diablerie.Engine.UI.GamepadCursor.CancelDown)
             {
                 Exit();
             }
-            else if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+            else if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Diablerie.Engine.UI.GamepadCursor.ConfirmDown)
             {
                 Play();
             }
