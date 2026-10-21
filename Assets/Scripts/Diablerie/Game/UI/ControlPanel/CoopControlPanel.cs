@@ -28,8 +28,14 @@ namespace Diablerie.Game.UI.ControlPanel
         private RectTransform _panel;
         private GameObject _guestPanel;
         private Saved _original;
-        private readonly List<KeyValuePair<RectTransform, Quaternion>> _textRotations =
-            new List<KeyValuePair<RectTransform, Quaternion>>();
+        private class SavedText
+        {
+            public RectTransform rect;
+            public Quaternion rotation;
+            public Vector3 scale;
+        }
+
+        private readonly List<SavedText> _texts = new List<SavedText>();
         private class SavedFill
         {
             public Image image;
@@ -122,8 +128,8 @@ namespace Diablerie.Game.UI.ControlPanel
                 _skillBar.transform.SetParent(_panel, false);   // anchors stay: the panel is as big as the canvas
             }
 
-            Turn(_panel, -90f, false, true);   // clockwise, left side
-            Turn(guest, 90f, true, false);     // counterclockwise, right side
+            Turn(_panel, -90f, false, true, true);   // clockwise, left side, flipped over the X axis
+            Turn(guest, 90f, true, false, false);    // counterclockwise, right side
             return true;
         }
 
@@ -169,12 +175,14 @@ namespace Diablerie.Game.UI.ControlPanel
             }
             _original = null;
 
-            for (int i = 0; i < _textRotations.Count; ++i)
+            for (int i = 0; i < _texts.Count; ++i)
             {
-                if (_textRotations[i].Key != null)
-                    _textRotations[i].Key.localRotation = _textRotations[i].Value;
+                if (_texts[i].rect == null)
+                    continue;
+                _texts[i].rect.localRotation = _texts[i].rotation;
+                _texts[i].rect.localScale = _texts[i].scale;
             }
-            _textRotations.Clear();
+            _texts.Clear();
 
             for (int i = 0; i < _fills.Count; ++i)
             {
@@ -206,7 +214,7 @@ namespace Diablerie.Game.UI.ControlPanel
         // bottom edge. Turned by 90 degrees its bottom edge becomes the left (clockwise) or the right
         // (counterclockwise) edge of the view. The width of the view becomes the height, so the panel is also
         // scaled down by height / width to fit between the top and the bottom of the screen.
-        private void Turn(RectTransform root, float angle, bool right, bool remember)
+        private void Turn(RectTransform root, float angle, bool right, bool flip, bool remember)
         {
             Vector2 view = ((RectTransform) root.parent).rect.size;
             float scale = view.y / view.x;
@@ -218,25 +226,38 @@ namespace Diablerie.Game.UI.ControlPanel
             // The turned panel is view.y * scale pixels wide, its middle is half of that from the edge
             root.anchoredPosition = new Vector2((right ? -1f : 1f) * view.y * scale / 2f, 0f);
             root.localRotation = Quaternion.Euler(0f, 0f, angle);
-            root.localScale = new Vector3(scale, scale, 1f);
+            // Flipped over the X axis of the screen (top and bottom swap, the panel stays on its side). The panel is
+            // turned by 90 degrees, so the X axis of the screen is the local X axis of the panel.
+            root.localScale = new Vector3(flip ? -scale : scale, scale, 1f);
 
-            OrientBulbs(root, right, remember);
+            // Flipped, the local X axis of the panel points up (as on the right panel), so both fill from the left
+            OrientBulbs(root, right || flip, remember);
 
-            // Texts turn with everything else, turn them back so they can be read
+            // Texts turn (and flip) with everything else, undo it so they can be read. Undoing a turn is turning
+            // back; undoing a flip and a turn together is flipping the text again and turning it the other way.
             foreach (var text in root.GetComponentsInChildren<Text>(true))
             {
                 var t = text.rectTransform;
                 if (remember)
-                    _textRotations.Add(new KeyValuePair<RectTransform, Quaternion>(t, t.localRotation));
-                t.localRotation = t.localRotation * Quaternion.Euler(0f, 0f, -angle);
+                    _texts.Add(new SavedText { rect = t, rotation = t.localRotation, scale = t.localScale });
+                if (flip)
+                {
+                    t.localRotation = Quaternion.Euler(0f, 0f, angle) * t.localRotation;
+                    var ts = t.localScale;
+                    t.localScale = new Vector3(-ts.x, ts.y, ts.z);
+                }
+                else
+                {
+                    t.localRotation = t.localRotation * Quaternion.Euler(0f, 0f, -angle);
+                }
             }
         }
 
         // The bulbs fill along their own bottom to top direction, which turns with the panel. Both bulbs of both
         // players should still fill from the bottom of the screen to the top, so the fill runs sideways inside
-        // the turned panel: from the local right side on the left panel (clockwise, its right is the bottom of
-        // the screen) and from the local left side on the right panel (counterclockwise).
-        private void OrientBulbs(RectTransform root, bool right, bool remember)
+        // the turned panel: from the local left side when the local X axis of the panel points up (the right panel,
+        // and the left panel since it is flipped), from the local right side when it points down.
+        private void OrientBulbs(RectTransform root, bool fromLeft, bool remember)
         {
             var images = new List<Image>();
             foreach (var bulb in root.GetComponentsInChildren<LifeBulb>(true))
@@ -251,7 +272,7 @@ namespace Diablerie.Game.UI.ControlPanel
                     _fills.Add(new SavedFill { image = image, method = image.fillMethod, origin = image.fillOrigin });
                 image.type = Image.Type.Filled;
                 image.fillMethod = Image.FillMethod.Horizontal;
-                image.fillOrigin = (int) (right ? Image.OriginHorizontal.Left : Image.OriginHorizontal.Right);
+                image.fillOrigin = (int) (fromLeft ? Image.OriginHorizontal.Left : Image.OriginHorizontal.Right);
             }
         }
 
