@@ -41,6 +41,13 @@ namespace Diablerie.Engine.UI
         private readonly bool[] _held = new bool[2];
         private readonly bool[] _down = new bool[2];
         private readonly bool[] _up = new bool[2];
+        // A button that was already down when the cursor came on (the A that opened the stash, a menu or a dialog)
+        // must be let go of before it counts as a click, otherwise it clicks whatever is under the cursor.
+        private readonly bool[] _needRelease = new bool[2];
+        private float _clickAllowedAt;
+        private const float ActivationLockSeconds = 0.2f;
+        private const float ClickCooldownSeconds = 0.12f;
+        private float _lastClick = -100f;
         private PadInput _input;
 
         public static bool Active => _instance != null && _instance._active;
@@ -121,6 +128,8 @@ namespace Diablerie.Engine.UI
                     _position = new Vector2(Screen.width / 2f, Screen.height / 2f);
                 _padDriven = true;
             }
+            if (_active && !wasActive)
+                _clickAllowedAt = Time.unscaledTime + ActivationLockSeconds;
 
             _cancelDown = false;
             _confirmDown = false;
@@ -137,8 +146,13 @@ namespace Diablerie.Engine.UI
                     _padDriven = true;
                 }
 
-                now[0] = Input.GetKey(CoopPads.Key(1, 0));
-                now[1] = Input.GetKey(CoopPads.Key(1, 2));
+                for (int i = 0; i < 2; ++i)
+                {
+                    bool raw = Input.GetKey(CoopPads.Key(1, i == 0 ? 0 : 2));
+                    if (!raw)
+                        _needRelease[i] = false;
+                    now[i] = raw && !_needRelease[i];
+                }
                 _cancelDown = CoopPads.ButtonDown(1, 1);
                 _confirmDown = !inGame && CoopPads.ButtonDown(1, 7);
                 if (inGame)
@@ -150,9 +164,26 @@ namespace Diablerie.Engine.UI
                 }
             }
 
+            // While the cursor is off, a held button is remembered so it has to be released first
+            if (!_active)
+            {
+                _needRelease[0] = pad != 0 && Input.GetKey(CoopPads.Key(1, 0));
+                _needRelease[1] = pad != 0 && Input.GetKey(CoopPads.Key(1, 2));
+            }
+
             for (int i = 0; i < 2; ++i)
             {
-                _down[i] = now[i] && !_held[i];
+                bool press = now[i] && !_held[i];
+                if (press && (Time.unscaledTime < _clickAllowedAt || Time.unscaledTime - _lastClick < ClickCooldownSeconds))
+                {
+                    // Too soon after the cursor came on or after the last click: wait for the next fresh press
+                    _needRelease[i] = true;
+                    now[i] = false;
+                    press = false;
+                }
+                if (press)
+                    _lastClick = Time.unscaledTime;
+                _down[i] = press;
                 _up[i] = !now[i] && _held[i];
                 _held[i] = now[i];
             }

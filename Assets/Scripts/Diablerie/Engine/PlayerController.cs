@@ -459,6 +459,8 @@ namespace Diablerie.Engine
             player.unit.run = run;
         }
 
+        public Unit PlayerUnit => player != null ? player.unit : null;
+
         public bool FixedSelection()
         {
             return Diablerie.Engine.UI.GamepadCursor.Held(0) || player.HandsItem != null || usingSkills;

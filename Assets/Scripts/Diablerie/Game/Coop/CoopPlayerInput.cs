@@ -36,7 +36,6 @@ namespace Diablerie.Game.Coop
         private const float AutoPickupRadius = 3.5f;
         private const float ItemPickupRadius = 2f;
         private const float AutoPickupInterval = 0.25f;
-        private const float InteractRadius = 12f;
         private const float MeleeTargetRadius = 14f;
         private const float RangedTargetRadius = 22f;
 
@@ -407,9 +406,11 @@ namespace Diablerie.Game.Coop
                 if (!entity.selectable)
                     continue;
 
-                float distance = Vector2.Distance(position, Iso.MapToIso(entity.transform.position));
-                if (distance > InteractRadius)
+                // Only what is in the 3x3 tiles around the player, the center tile included
+                if (!MouseSelection.IsInGrid6x6(_unit, entity))
                     continue;
+
+                float distance = Vector2.Distance(position, Iso.MapToIso(entity.transform.position));
 
                 // Items first, then chests and the like
                 float score = distance - (loot ? 4f : 0f);

@@ -10,8 +10,6 @@ namespace Diablerie.Engine
 {
     class MouseSelection : MonoBehaviour
     {
-        private static readonly Vector3 Expand = new Vector3(25, 20) / Iso.pixelsPerUnit;
-
         public static MouseSelection instance;
         
         private Entity hotEntity;
@@ -38,14 +36,13 @@ namespace Diablerie.Engine
             {
                 FindVisibleLoots();
             }
-            _lootHighlighter.Show(loots, updateHotEntity);
+            // Loot labels are never hovered with the mouse, the hot entity comes from the player's 3x3 tiles only
+            _lootHighlighter.Show(loots, false);
             
             if (updateHotEntity)
             {
                 if (Ui.Hover)
                     HotEntity = null;
-                else if (_lootHighlighter.Hot != null)
-                    HotEntity = _lootHighlighter.Hot;
                 else
                     HotEntity = CalcHotEntity();
             }
@@ -136,34 +133,40 @@ namespace Diablerie.Engine
             label.Hide();
         }
 
+        // True when the entity stands in the 3x3 tiles around the tile the unit stands on (the center tile included)
+        public static bool IsInGrid6x6(Unit origin, Entity entity)
+        {
+            var center = Iso.Snap((Vector3) origin.iso.pos);
+            var tile = Iso.Snap(Iso.MapToIso(entity.transform.position));
+            return Mathf.Abs(tile.x - center.x) <= 4 && Mathf.Abs(tile.y - center.y) <= 4;
+        }
+
+        // The mouse does not pick anything: the hot entity is the closest selectable entity in the 3x3 tiles around the player
         private Entity CalcHotEntity()
         {
-            Vector3 currentPosition = new Vector3();
-            Vector3 mousePos = Camera.main.ScreenToWorldPoint(Diablerie.Engine.UI.GamepadCursor.Position);
-            mousePos.z = 0;
+            var origin = PlayerController.instance.PlayerUnit;
+            if (origin == null)
+                return null;
+
+            Vector2 originPos = origin.iso.pos;
             Entity bestMatch = null;
+            float bestDistance = float.MaxValue;
             foreach (var entity in WorldState.instance.Entities)
             {
-                var delta = entity.transform.position - mousePos;
-                if (delta.x > 8f || delta.x < -8f || delta.y > 8f || delta.y < -8f)
-                    continue;
-
                 if (!entity.selectable)
                     continue;
 
                 if (WorldState.instance.IsPlayerUnit(entity))
                     continue;
 
-                Bounds bounds = entity.bounds;
-                bounds.Expand(Expand);
-                if (!bounds.Contains(mousePos))
+                if (!IsInGrid6x6(origin, entity))
                     continue;
 
-                bool betterMatch = bestMatch == null || Tools.ManhattanDistance(mousePos, bounds.center) < Tools.ManhattanDistance(mousePos, currentPosition);
-                if (betterMatch)
+                float distance = Vector2.Distance(originPos, Iso.MapToIso(entity.transform.position));
+                if (distance < bestDistance)
                 {
+                    bestDistance = distance;
                     bestMatch = entity;
-                    currentPosition = bounds.center;
                 }
             }
 
