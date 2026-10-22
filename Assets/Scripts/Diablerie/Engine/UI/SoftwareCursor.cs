@@ -13,7 +13,6 @@ namespace Diablerie.Engine.UI
 
         public SoftwareCursor(RectTransform parentTransform)
         {
-            Debug.Assert(instance == null);
             instance = this;
             _root = new GameObject("SoftwareCursor");
             _rectTransform = _root.AddComponent<RectTransform>();
@@ -26,7 +25,7 @@ namespace Diablerie.Engine.UI
             _image.raycastTarget = false;
         }
 
-        public static bool Showing => instance != null && instance._root.activeSelf;
+        public static bool Showing => instance != null && instance._root != null && instance._root.activeSelf;
 
         public static void SetCursor(Texture2D texture)
         {
@@ -35,6 +34,9 @@ namespace Diablerie.Engine.UI
 
         public static void SetCursor(Texture2D texture, Vector2 hotSpot)
         {
+            if (instance == null || instance._root == null)
+                return;
+
             if (texture != null)
             {
                 instance._image.texture = texture;
@@ -57,10 +59,16 @@ namespace Diablerie.Engine.UI
         private class InternalBehaviour : MonoBehaviour
         {
             public SoftwareCursor cursor;
-            
+
             private void Update()
             {
                 cursor.UpdatePosition();
+            }
+
+            private void OnDestroy()
+            {
+                if (instance == cursor)
+                    instance = null;
             }
         }
     }
