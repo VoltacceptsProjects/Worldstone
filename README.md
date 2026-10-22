@@ -10,7 +10,7 @@ No commercial use is intended. All images and sounds used are from Diablo II and
 
 # What's different from Diablerie
 
-Worldstone adds persistence, the Act 1 quest line and the town features Diablerie does not have yet (NPC menus and speech, stash, waypoints, trading, gambling), and reworks the menus to follow the original game more closely.
+Worldstone adds persistence, the Act 1 quest line and the town features Diablerie does not have yet (NPC menus and speech, stash, waypoints, trading, gambling), local two player co-op, gamepad support and an automap, and reworks the menus to follow the original game more closely.
 
 ## Characters and saving
 * **Persistent characters.** Characters are saved to disk as JSON files (`.d2json`, with a `.bak` backup written before each save) in the game's save directory. A save stores the class, level, experience, life and mana, gold, current act, carried inventory, equipped items, the item held on the cursor, skill hotkeys with the left and right skills, discovered waypoints, Act 1 quest progress, and which one-time NPC lines you have already heard.
@@ -58,7 +58,44 @@ The six Act 1 quests are tracked per character and saved with it. Quest objects 
 * **Waypoint panel rebuilt to match the original.** Act tabs, a "Choose your destination" header, waypoint icons, greyed-out undiscovered destinations and a close button. It is laid out like the inventory panel (320x432, mirrored to the left side of the screen).
 * **Panel behaviour.** The waypoint and stash panels close with Escape or Space, and the stash also closes when you walk away from it.
 
+## Couch co-op
+Two players share one screen. Player 1 plays as always, player 2 joins with a gamepad or the keyboard.
+* **Joining and leaving.** Player 2 joins with Start on the second gamepad or `F9`, and leaves with `F10`. The `/coop` console command toggles player 2, and `/coop <class or character>` joins as that class or saved character. Once player 2 has joined, he is there again in the next game of the same session.
+* **Player 2 is a real character.** He is saved together with player 1 as a normal character file. When he joins, the remembered character is used, otherwise the most recently played one that is not player 1, otherwise a new character is made (class chosen to differ from player 1, with a few life and mana potions). Player 2's class and character are remembered between sessions.
+* **Shared stash.** The stash is shared by the whole party and saved with player 1.
+* **One screen.** The camera follows the middle between the players. Walking further away from the other player is not possible, and if player 1 gets too far away (mouse movement, doors, waypoints) player 2 is brought along.
+* **Two control panels.** In co-op the control panel is split: player 1's on the left side of the view, player 2's on the right with his own life, mana and skill bar. Both players get a small name and life bar overhead.
+* **Revive.** A fallen player gets up after 5 seconds next to the partner with half of his life. If both are down, both get up where they fell with full life.
+* **Windows.** The game's windows (inventory, dialogs, stash, waypoints and so on) exist once, so they belong to whoever opened them. The other player keeps playing. Skills do not fire while a window is open.
+* **Player 2's skills.** He has no skill panel, every class comes with four fixed skills on the face buttons (Sorceress: Fire Bolt, Charged Bolt, Frost Nova, Frozen Orb; Necromancer: Attack, Raise Skeleton, Clay Golem, Raise Skeletal Mage; Barbarian: Attack, War Cry, Battle Cry, Battle Orders; Druid: Attack, Summon Spirit Wolf, Summon Grizzly, Raven; Assassin: Attack, Charged Bolt Sentry, Lightning Sentry, Inferno Sentry). Skills aim at the closest enemy, otherwise the way the stick points.
+* **Keyboard for player 2.** `WASD` or arrows walk, `J` `K` `L` `U` cast, `E` interacts, `1` and `2` drink a life or mana potion, `Tab` opens the inventory.
+
+## Gamepad
+The controller layout follows Diablo II Resurrected. The first connected gamepad is player 1 and the second is player 2 (virtual joysticks such as vJoy are ignored).
+
+| Input | Action |
+| --- | --- |
+| Left stick | Walk, click to toggle run and walk |
+| `A` | Skill 1, or interact with the closest item, object or townsperson |
+| `X` `B` `Y` `RB` `RT` | Skills 2 to 6 |
+| `LT` (hold) | Second skill bar: `A` and `X` use the left and right mouse skill (player 1) |
+| `LB` (hold) | Show item labels (player 1) |
+| D-pad | Belt slots 1 to 4, drinks a potion |
+| `View` (Back) | Automap (player 1) |
+| `Start` | Game menu (player 1), inventory and close windows (player 2) |
+
+* **Gamepad cursor.** The whole interface can be used with player 1's gamepad. A circle cursor is moved with the sticks, `A` is left click, `X` is right click, `B` closes (Escape), `Start` confirms in the title menus and `LB` / `RB` switch between inventory, character and quests in game. The cursor turns on by itself in all menus and while any window is open, and the real mouse takes over as soon as it moves.
+* **Player 2's cursor.** While player 2 owns the windows, his sticks (`WASD` or arrows on the keyboard) move the cursor, `A` / `X` (`E` / `F`) click, `LB` / `RB` (`Tab`) switch window and `B` closes.
+* There is no belt and no weapon swap, the belt slots are the potion kinds in the inventory (life, mana, rejuvenation).
+
+## Automap
+* **Tab** shows or hides a Diablo II style automap, drawn over the game view in the same isometric projection with the player in the middle.
+* Only what you have explored is drawn, and exploration is tracked while the map is hidden. Every level has its own map.
+* Walls and doors are drawn along the edges of the tiles. Markers: white cross for you, green cross with name for NPCs, red cross for monsters, blue cross for allies, blue diamond for waypoints, yellow diamond for level exits.
+* The area name, difficulty and the clock are shown in the top right corner.
+
 ## Known limitations
+* In co-op, Amazon and Paladin as player 2 only have the Attack skill for now.
 * Only Act 1 has quests. The Forgotten Tower (The Countess) and Sisters to the Slaughter (Andariel) are listed and have dialog, but nothing completes them yet. Until they do, Warriv's Travel East does not appear. Use `/act 2` from the console to go on.
 * Quest rewards are not given yet (free skill point, Rogue mercenaries, the imbued item, and so on).
 * The Cairn Stones always use the same order, and the Tree of Inifuss bark is tracked as a flag rather than as an item.
@@ -121,6 +158,8 @@ Press Enter to open the in-game console. Some commands to test:
 | `/spawn diablo` | Spawn Diablo under the cursor |
 | `/spawn skeleton1 100` | Spawn 100 skeletons under the cursor |
 | `/act 1` ... `/act 5` | Go to the given act |
+| `/coop` | Add or remove player 2 |
+| `/coop <class or character>` | Add player 2 as the given class (new character) or saved character |
 
 # FAQ
 
